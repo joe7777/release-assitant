@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
@@ -24,7 +25,9 @@ public class Project {
     private String gitUrl;
 
     @Column(nullable = false)
-    private String defaultBranch;
+    private String branch;
+
+    private String gitTokenId;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -53,12 +56,20 @@ public class Project {
         this.gitUrl = gitUrl;
     }
 
-    public String getDefaultBranch() {
-        return defaultBranch;
+    public String getBranch() {
+        return branch;
     }
 
-    public void setDefaultBranch(String defaultBranch) {
-        this.defaultBranch = defaultBranch;
+    public void setBranch(String branch) {
+        this.branch = branch;
+    }
+
+    public String getGitTokenId() {
+        return gitTokenId;
+    }
+
+    public void setGitTokenId(String gitTokenId) {
+        this.gitTokenId = gitTokenId;
     }
 
     public Instant getCreatedAt() {
@@ -67,6 +78,11 @@ public class Project {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    @PrePersist
+    public void onCreate() {
+        this.createdAt = Instant.now();
     }
 
     @Override
