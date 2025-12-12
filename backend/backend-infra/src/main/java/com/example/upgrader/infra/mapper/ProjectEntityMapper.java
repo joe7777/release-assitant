@@ -1,7 +1,6 @@
 package com.example.upgrader.infra.mapper;
 
 import com.example.upgrader.core.model.Project;
-import com.example.upgrader.infra.entity.Project;
 
 public final class ProjectEntityMapper {
 
