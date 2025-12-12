@@ -1,6 +1,5 @@
 package com.example.upgrader.infra.mapper;
 
-import com.example.upgrader.core.model.Analysis;
 import com.example.upgrader.core.model.Effort;
 import com.example.upgrader.infra.entity.Change;
 import com.example.upgrader.infra.entity.Analysis;
