@@ -18,7 +18,7 @@ function ProjectSelectionPage() {
     [projectGitUrl, projectName, branch, springVersionTarget]
   );
 
-  const handleSubmit = async (event: FormEvent) {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!isFormValid || loading) return;
     setLoading(true);
