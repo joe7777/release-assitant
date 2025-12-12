@@ -89,18 +89,36 @@ public class ProjectAnalyzerService {
 
     private Path runDependencyTree(Path repoDir) throws IOException, InterruptedException {
         Path dotFile = repoDir.resolve("dependency-tree.dot");
-        ProcessBuilder processBuilder = new ProcessBuilder("mvn", "-q", "dependency:tree", "-DoutputType=dot",
-                "-DoutputFile=" + dotFile.toString());
+        List<String> command = buildMavenCommand(repoDir, dotFile);
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.directory(repoDir.toFile());
         processBuilder.redirectErrorStream(true);
 
-        Process process = processBuilder.start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IllegalStateException("Maven dependency:tree failed with code " + exitCode + "\n" + output);
+        try {
+            Process process = processBuilder.start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IllegalStateException("Maven dependency:tree failed with code " + exitCode + "\n" + output);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to run Maven. Ensure Maven is installed or the repository provides mvnw.", e);
         }
         return dotFile;
+    }
+
+    private List<String> buildMavenCommand(Path repoDir, Path dotFile) throws IOException {
+        List<String> command = new ArrayList<>();
+        Path mavenWrapper = repoDir.resolve("mvnw");
+        if (Files.exists(mavenWrapper)) {
+            mavenWrapper.toFile().setExecutable(true);
+            command.add(mavenWrapper.toAbsolutePath().toString());
+        } else {
+            command.add("mvn");
+        }
+
+        command.addAll(List.of("-q", "dependency:tree", "-DoutputType=dot", "-DoutputFile=" + dotFile.toString()));
+        return command;
     }
 
     private List<DependencyDto> extractDependencies(Path dotFile) throws IOException {
