@@ -45,6 +45,6 @@ public class JpaAnalysisRepositoryAdapter implements AnalysisRepository {
     @Override
     @Transactional(readOnly = true)
     public List<Analysis> findAll() {
-        return analysisRepository.findAllWithDetails().stream().map(AnalysisEntityMapper::toModel).toList();
+        return analysisRepository.findAll().stream().map(AnalysisEntityMapper::toModel).toList();
     }
 }

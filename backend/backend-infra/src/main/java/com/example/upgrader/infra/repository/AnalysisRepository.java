@@ -13,5 +13,5 @@ public interface AnalysisRepository extends JpaRepository<Analysis, Long> {
     Optional<Analysis> findWithDetailsById(Long id);
 
     @EntityGraph(attributePaths = {"project", "changes", "effortSummary"})
-    List<Analysis> findAllWithDetails();
+    List<Analysis> findAll();
 }
