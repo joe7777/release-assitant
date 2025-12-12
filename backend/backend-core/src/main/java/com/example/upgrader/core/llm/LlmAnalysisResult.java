@@ -222,6 +222,7 @@ public class LlmAnalysisResult {
 
     public static class LibraryChange {
         private String id;
+        private String title;
         private String groupId;
         private String artifactId;
         private String currentVersion;
@@ -252,6 +253,14 @@ public class LlmAnalysisResult {
 
         public void setArtifactId(String artifactId) {
             this.artifactId = artifactId;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public void setTitle(String title) {
+            this.title = title;
         }
 
         public String getCurrentVersion() {
