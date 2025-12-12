@@ -5,7 +5,8 @@ spring:
     password: upgrader
   jpa:
     hibernate:
-      ddl-auto: none
+      # Generate missing tables automatically so a fresh database can start without manual migrations
+      ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
