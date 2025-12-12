@@ -1,0 +1,63 @@
+rules:
+  SPRING:
+    CRITICAL:
+      baseWorkpoints: 13
+      metadataMultipliers:
+        impactedFiles: 2
+        occurrences: 1
+    HIGH:
+      baseWorkpoints: 8
+      metadataMultipliers:
+        impactedFiles: 1
+        occurrences: 1
+    MEDIUM:
+      baseWorkpoints: 5
+      metadataMultipliers:
+        impactedFiles: 1
+    LOW:
+      baseWorkpoints: 3
+  JAVA:
+    HIGH:
+      baseWorkpoints: 7
+      metadataMultipliers:
+        impactedFiles: 1
+    MEDIUM:
+      baseWorkpoints: 4
+    LOW:
+      baseWorkpoints: 2
+  LIBRARY:
+    HIGH:
+      baseWorkpoints: 6
+      metadataMultipliers:
+        impactedFiles: 1
+    MEDIUM:
+      baseWorkpoints: 3
+    LOW:
+      baseWorkpoints: 1
+  CODE:
+    HIGH:
+      baseWorkpoints: 5
+      metadataMultipliers:
+        impactedFiles: 1
+        occurrences: 1
+    MEDIUM:
+      baseWorkpoints: 3
+      metadataMultipliers:
+        impactedFiles: 1
+    LOW:
+      baseWorkpoints: 1
+  SECURITY:
+    CRITICAL:
+      baseWorkpoints: 15
+      metadataMultipliers:
+        impactedFiles: 2
+        occurrences: 2
+    HIGH:
+      baseWorkpoints: 10
+      metadataMultipliers:
+        impactedFiles: 1
+        occurrences: 2
+    MEDIUM:
+      baseWorkpoints: 6
+    LOW:
+      baseWorkpoints: 3
