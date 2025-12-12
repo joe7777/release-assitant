@@ -27,8 +27,10 @@ services:
       MCP_PROJECT_ANALYZER_URL: http://mcp-project-analyzer:8080
       MCP_KNOWLEDGE_RAG_URL: http://mcp-knowledge-rag:8081
       MCP_METHODOLOGY_URL: http://mcp-methodology:8080
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
     ports:
       - "8080:8080"
+      - "5005:5005"
     depends_on:
       - postgres
 
@@ -48,23 +50,31 @@ services:
     build: ./mcp-project-analyzer
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006"
     depends_on:
       - backend
+    ports:
+      - "5006:5006"
 
   mcp-knowledge-rag:
     build: ./mcp-knowledge-rag
     environment:
       QDRANT_URL: http://vector-db:6333
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007"
     depends_on:
       - vector-db
     ports:
       - "8081:8081"
+      - "5007:5007"
 
   mcp-methodology:
     build: ./mcp-methodology
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5008"
+    ports:
+      - "5008:5008"
 
 volumes:
   postgres-data:
