@@ -161,7 +161,13 @@ public class McpLlmClient implements LlmClient {
         LlmAnalysisResult.EffortResult effortResult = new LlmAnalysisResult.EffortResult();
         effortResult.setTotalWorkpoints(response.getTotalWorkpoints());
         effortResult.setByChange(response.getByChange().stream()
-                .map(item -> new LlmAnalysisResult.Workpoint(item.getChangeId(), item.getWorkpoints()))
+                .map(item -> {
+                    LlmAnalysisResult.Workpoint workpoint = new LlmAnalysisResult.Workpoint();
+                    workpoint.setChangeId(item.getChangeId());
+                    workpoint.setWorkpoints(item.getWorkpoints());
+                    workpoint.setReason(item.getReason());
+                    return workpoint;
+                })
                 .collect(Collectors.toList()));
         return effortResult;
     }
