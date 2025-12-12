@@ -12,7 +12,7 @@ public class McpProperties {
 
     public McpProperties(
             @Value("${mcp.project-analyzer-url:http://mcp-project-analyzer:8080}") String projectAnalyzerUrl,
-            @Value("${mcp.knowledge-rag-url:http://mcp-knowledge-rag:8080}") String knowledgeRagUrl,
+            @Value("${mcp.knowledge-rag-url:http://mcp-knowledge-rag:8081}") String knowledgeRagUrl,
             @Value("${mcp.methodology-url:http://mcp-methodology:8080}") String methodologyUrl) {
         this.projectAnalyzerUrl = projectAnalyzerUrl;
         this.knowledgeRagUrl = knowledgeRagUrl;
