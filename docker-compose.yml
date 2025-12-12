@@ -24,6 +24,9 @@ services:
       SPRING_DATASOURCE_USERNAME: upgrader
       SPRING_DATASOURCE_PASSWORD: upgrader
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MCP_PROJECT_ANALYZER_URL: http://mcp-project-analyzer:8080
+      MCP_KNOWLEDGE_RAG_URL: http://mcp-knowledge-rag:8080
+      MCP_METHODOLOGY_URL: http://mcp-methodology:8080
     ports:
       - "8080:8080"
     depends_on:
