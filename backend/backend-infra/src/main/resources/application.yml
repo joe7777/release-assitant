@@ -10,3 +10,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+mcp:
+  project-analyzer-url: ${MCP_PROJECT_ANALYZER_URL:http://localhost:8082}
+  knowledge-rag-url: ${MCP_KNOWLEDGE_RAG_URL:http://localhost:8083}
+  methodology-url: ${MCP_METHODOLOGY_URL:http://localhost:8084}

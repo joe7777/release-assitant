@@ -2,6 +2,7 @@ package com.example.upgrader.core.service;
 
 import com.example.upgrader.core.command.CreateAnalysisCommand;
 import com.example.upgrader.core.llm.LlmAnalysisResult;
+import com.example.upgrader.core.llm.LlmClient;
 import com.example.upgrader.core.model.Analysis;
 import com.example.upgrader.core.model.AnalysisStatus;
 import com.example.upgrader.core.model.Change;
@@ -24,10 +25,12 @@ public class AnalysisService {
 
     private final AnalysisRepository analysisRepository;
     private final ProjectRepository projectRepository;
+    private final LlmClient llmClient;
 
-    public AnalysisService(AnalysisRepository analysisRepository, ProjectRepository projectRepository) {
+    public AnalysisService(AnalysisRepository analysisRepository, ProjectRepository projectRepository, LlmClient llmClient) {
         this.analysisRepository = analysisRepository;
         this.projectRepository = projectRepository;
+        this.llmClient = llmClient;
     }
 
     public Analysis createAnalysis(CreateAnalysisCommand command) {
@@ -39,7 +42,10 @@ public class AnalysisService {
         analysis.setStatus(AnalysisStatus.PENDING);
         analysis.setCreatedAt(LocalDateTime.now());
 
-        return analysisRepository.save(analysis);
+        Analysis saved = analysisRepository.save(analysis);
+
+        LlmAnalysisResult result = llmClient.runAnalysis(saved);
+        return updateAnalysisFromLLMResult(saved.getId(), result);
     }
 
     public Analysis getAnalysisSummary(Long id) {
