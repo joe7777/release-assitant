@@ -4,6 +4,7 @@ import com.example.mcpknowledgerag.ai.ChatGateway;
 import com.example.mcpknowledgerag.ai.EmbeddingGateway;
 import com.example.mcpknowledgerag.ai.SpringAiChatGateway;
 import com.example.mcpknowledgerag.ai.SpringAiEmbeddingGateway;
+import com.example.mcpknowledgerag.config.AppAiProperties;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,8 +22,8 @@ public class AiConfiguration {
     @Bean
     @ConditionalOnBean(EmbeddingModel.class)
     @ConditionalOnMissingBean
-    public EmbeddingGateway embeddingGateway(EmbeddingModel embeddingModel) {
-        return new SpringAiEmbeddingGateway(embeddingModel);
+    public EmbeddingGateway embeddingGateway(EmbeddingModel embeddingModel, AppAiProperties properties) {
+        return new SpringAiEmbeddingGateway(embeddingModel, properties.getEmbedding());
     }
 
     @Bean
