@@ -4,6 +4,7 @@ public class McpSearchRequest {
     private String query;
     private Filters filters = new Filters();
     private int topK = 10;
+    private String llmModel;
 
     public String getQuery() {
         return query;
@@ -27,6 +28,14 @@ public class McpSearchRequest {
 
     public void setTopK(int topK) {
         this.topK = topK;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public static class Filters {

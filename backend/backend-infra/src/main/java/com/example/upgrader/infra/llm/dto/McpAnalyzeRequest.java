@@ -4,14 +4,16 @@ public class McpAnalyzeRequest {
     private String repoUrl;
     private String branch;
     private String gitToken;
+    private String llmModel;
 
     public McpAnalyzeRequest() {
     }
 
-    public McpAnalyzeRequest(String repoUrl, String branch, String gitToken) {
+    public McpAnalyzeRequest(String repoUrl, String branch, String gitToken, String llmModel) {
         this.repoUrl = repoUrl;
         this.branch = branch;
         this.gitToken = gitToken;
+        this.llmModel = llmModel;
     }
 
     public String getRepoUrl() {
@@ -36,5 +38,13 @@ public class McpAnalyzeRequest {
 
     public void setGitToken(String gitToken) {
         this.gitToken = gitToken;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 }

@@ -37,6 +37,7 @@ public final class AnalysisEntityMapper {
         entity.setProject(project);
         entity.setSpringVersionCurrent(model.getSpringVersionCurrent());
         entity.setSpringVersionTarget(model.getSpringVersionTarget());
+        entity.setLlmModel(model.getLlmModel());
         entity.setStatus(model.getStatus());
         if (model.getCreatedAt() != null && entity.getCreatedAt() == null) {
             entity.setCreatedAt(model.getCreatedAt().toInstant(ZoneOffset.UTC));
@@ -56,6 +57,7 @@ public final class AnalysisEntityMapper {
         model.setProject(ProjectEntityMapper.toModel(entity.getProject()));
         model.setSpringVersionCurrent(entity.getSpringVersionCurrent());
         model.setSpringVersionTarget(entity.getSpringVersionTarget());
+        model.setLlmModel(entity.getLlmModel());
         model.setStatus(entity.getStatus());
         if (entity.getCreatedAt() != null) {
             model.setCreatedAt(LocalDateTime.ofInstant(entity.getCreatedAt(), ZoneOffset.UTC));

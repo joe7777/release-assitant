@@ -5,6 +5,7 @@ public class AnalysisSummaryResponse {
     private String projectName;
     private String springVersionCurrent;
     private String springVersionTarget;
+    private String llmModel;
     private String status;
     private Integer totalWorkpoints;
     private String createdAt;
@@ -39,6 +40,14 @@ public class AnalysisSummaryResponse {
 
     public void setSpringVersionTarget(String springVersionTarget) {
         this.springVersionTarget = springVersionTarget;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public String getStatus() {

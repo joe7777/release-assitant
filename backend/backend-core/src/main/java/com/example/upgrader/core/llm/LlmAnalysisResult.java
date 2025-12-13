@@ -6,6 +6,7 @@ public class LlmAnalysisResult {
     private String analysisId;
     private String springVersionCurrent;
     private String springVersionTarget;
+    private String llmModel;
     private String summary;
     private List<SpringChange> springChanges;
     private List<JavaChange> javaChanges;
@@ -44,6 +45,14 @@ public class LlmAnalysisResult {
 
     public void setSummary(String summary) {
         this.summary = summary;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public List<SpringChange> getSpringChanges() {

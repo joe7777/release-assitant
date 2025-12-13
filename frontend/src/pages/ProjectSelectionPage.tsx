@@ -2,20 +2,22 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createAnalysis } from '../api/client';
 
-const mockSpringTargets = ['6.0', '6.1', '6.2'];
+const springFiveTargets = ['5.0', '5.1', '5.2', '5.3'];
+const llmModels = ['gpt-4o', 'gpt-4o-mini'];
 
 function ProjectSelectionPage() {
   const navigate = useNavigate();
   const [projectGitUrl, setProjectGitUrl] = useState('');
   const [projectName, setProjectName] = useState('');
   const [branch, setBranch] = useState('main');
-  const [springVersionTarget, setSpringVersionTarget] = useState(mockSpringTargets[0]);
+  const [springVersionTarget, setSpringVersionTarget] = useState(springFiveTargets[0]);
+  const [llmModel, setLlmModel] = useState(llmModels[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isFormValid = useMemo(
-    () => Boolean(projectGitUrl && projectName && branch && springVersionTarget),
-    [projectGitUrl, projectName, branch, springVersionTarget]
+    () => Boolean(projectGitUrl && projectName && branch && springVersionTarget && llmModel),
+    [projectGitUrl, projectName, branch, springVersionTarget, llmModel]
   );
 
   const handleSubmit = async (event: FormEvent) => {
@@ -25,7 +27,7 @@ function ProjectSelectionPage() {
     setError(null);
 
     try {
-      const created = await createAnalysis({ projectGitUrl, projectName, branch, springVersionTarget });
+      const created = await createAnalysis({ projectGitUrl, projectName, branch, springVersionTarget, llmModel });
       navigate(`/analyses/${created.id}`);
     } catch (err) {
       console.error(err);
@@ -79,9 +81,20 @@ function ProjectSelectionPage() {
             value={springVersionTarget}
             onChange={(e) => setSpringVersionTarget(e.target.value)}
           >
-            {mockSpringTargets.map((version) => (
+            {springFiveTargets.map((version) => (
               <option key={version} value={version}>
                 {version}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="llmModel">Modèle LLM pour ChatGPT</label>
+          <select id="llmModel" value={llmModel} onChange={(e) => setLlmModel(e.target.value)}>
+            {llmModels.map((model) => (
+              <option key={model} value={model}>
+                {model}
               </option>
             ))}
           </select>

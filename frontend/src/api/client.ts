@@ -35,6 +35,7 @@ type AnalysisPayload = {
   projectName: string;
   branch: string;
   springVersionTarget: string;
+  llmModel: string;
 };
 
 export type Analysis = {
@@ -42,6 +43,7 @@ export type Analysis = {
   projectName: string;
   springVersionCurrent: string;
   springVersionTarget: string;
+  llmModel?: string;
   status: string;
   totalWorkpoints: number;
 };

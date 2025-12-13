@@ -39,6 +39,7 @@ public class AnalysisService {
         Analysis analysis = new Analysis();
         analysis.setProject(project);
         analysis.setSpringVersionTarget(command.getSpringVersionTarget());
+        analysis.setLlmModel(command.getLlmModel());
         analysis.setStatus(AnalysisStatus.PENDING);
         analysis.setCreatedAt(LocalDateTime.now());
 
@@ -66,6 +67,9 @@ public class AnalysisService {
         analysis.setSpringVersionCurrent(result.getSpringVersionCurrent());
         if (result.getSpringVersionTarget() != null) {
             analysis.setSpringVersionTarget(result.getSpringVersionTarget());
+        }
+        if (result.getLlmModel() != null) {
+            analysis.setLlmModel(result.getLlmModel());
         }
 
         Map<String, Integer> workpointsByChange = extractWorkpoints(result.getEffort());

@@ -5,6 +5,7 @@ public class CreateAnalysisRequest {
     private String projectName;
     private String branch;
     private String springVersionTarget;
+    private String llmModel;
     private String gitTokenId;
 
     public String getProjectGitUrl() {
@@ -37,6 +38,14 @@ public class CreateAnalysisRequest {
 
     public void setSpringVersionTarget(String springVersionTarget) {
         this.springVersionTarget = springVersionTarget;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public String getGitTokenId() {

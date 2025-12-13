@@ -26,6 +26,7 @@ public class AnalysisDtoMapper {
         command.setProjectName(request.getProjectName());
         command.setBranch(request.getBranch());
         command.setSpringVersionTarget(request.getSpringVersionTarget());
+        command.setLlmModel(request.getLlmModel());
         command.setGitTokenId(request.getGitTokenId());
         return command;
     }
@@ -36,6 +37,7 @@ public class AnalysisDtoMapper {
         response.setProjectName(analysis.getProject() != null ? analysis.getProject().getName() : null);
         response.setSpringVersionCurrent(analysis.getSpringVersionCurrent());
         response.setSpringVersionTarget(analysis.getSpringVersionTarget());
+        response.setLlmModel(analysis.getLlmModel());
         response.setStatus(analysis.getStatus() != null ? analysis.getStatus().name() : null);
         response.setTotalWorkpoints(extractTotalWorkpoints(analysis.getEffort()));
         response.setCreatedAt(analysis.getCreatedAt() != null ? analysis.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME) : null);
@@ -52,6 +54,7 @@ public class AnalysisDtoMapper {
         response.setProjectName(analysis.getProject() != null ? analysis.getProject().getName() : null);
         response.setSpringVersionCurrent(analysis.getSpringVersionCurrent());
         response.setSpringVersionTarget(analysis.getSpringVersionTarget());
+        response.setLlmModel(analysis.getLlmModel());
         response.setStatus(analysis.getStatus() != null ? analysis.getStatus().name() : null);
         response.setTotalWorkpoints(extractTotalWorkpoints(analysis.getEffort()));
         response.setCreatedAt(analysis.getCreatedAt() != null ? analysis.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME) : null);
