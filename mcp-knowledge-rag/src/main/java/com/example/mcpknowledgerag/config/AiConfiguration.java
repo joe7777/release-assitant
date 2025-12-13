@@ -23,7 +23,7 @@ public class AiConfiguration {
     @ConditionalOnBean(EmbeddingModel.class)
     @ConditionalOnMissingBean
     public EmbeddingGateway embeddingGateway(EmbeddingModel embeddingModel, AppAiProperties properties) {
-        return new SpringAiEmbeddingGateway(embeddingModel, properties.getEmbedding());
+        return new SpringAiEmbeddingGateway(embeddingModel, properties);
     }
 
     @Bean
