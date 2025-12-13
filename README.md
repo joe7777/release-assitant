@@ -64,6 +64,11 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
    - Qdrant : http://localhost:6333
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
+## Accéder à la documentation Swagger UI
+- **Backend (API principale)** : http://localhost:8080/swagger-ui/index.html
+- **MCP Knowledge RAG** : http://localhost:8081/swagger-ui/index.html
+- Une fois les services démarrés (via Maven ou Docker Compose), ces URLs exposent le catalogue OpenAPI pour tester les endpoints et vérifier la configuration.
+
 ## Ingestion des connaissances RAG (offline)
 - Le script `scripts/ingest-rag.zsh` prépare les release notes et guides de migration pour `mcp-knowledge-rag` (POST `/ingest`).
 - Il s'exécute hors analyse pour éviter tout impact sur les calculs en cours et réduire les appels à OpenAI.
