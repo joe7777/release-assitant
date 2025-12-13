@@ -12,8 +12,11 @@ function AnalysisDetailPage() {
 
   const summary = useMemo(() => {
     if (!analysis) return [];
+    const dependencyScopeLabel =
+      analysis.dependencyScope === 'SPRING_ONLY' ? 'Dépendances Spring uniquement' : 'Toutes les dépendances';
     return [
       { label: 'Statut', value: analysis.status },
+      { label: 'Portée des dépendances', value: dependencyScopeLabel },
       { label: 'Workpoints', value: analysis.totalWorkpoints },
       { label: 'Spring courant', value: analysis.springVersionCurrent },
       { label: 'Spring cible', value: analysis.springVersionTarget }

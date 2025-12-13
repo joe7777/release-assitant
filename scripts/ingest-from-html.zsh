@@ -14,7 +14,8 @@ DEFAULT_LIBRARY=${DEFAULT_LIBRARY:-"spring-boot"}
 DEFAULT_VERSION=${DEFAULT_VERSION:-"latest"}
 SELECTOR_CONTENT_CSS=${SELECTOR_CONTENT_CSS:-""}
 SELECTOR_REMOVE_CSS=${SELECTOR_REMOVE_CSS:-""}
-SOURCES_FILE=${SOURCES_FILE:-"rag_sources/sources.tsv"}
+# Fichier CSV (séparateur ;) avec les colonnes : sourceType;library;version;url;docId;contentCss;removeCss
+SOURCES_FILE=${SOURCES_FILE:-"rag_sources/sources.csv"}
 LOG_FILE=${LOG_FILE:-"logs/ingest-from-html.log"}
 RESULTS_FILE=${RESULTS_FILE:-"logs/ingest-from-html-results.jsonl"}
 FAIL_FAST=${FAIL_FAST:-"false"}
@@ -52,9 +53,17 @@ function json_escape() {
   echo "$value"
 }
 
-function parse_tsv_line() {
+function parse_csv_line() {
   local line="$1"
-  IFS=$'\t' read -r sourceType library version url docId contentCss removeCss <<< "$line"
+  IFS=';' read -r sourceType library version url docId contentCss removeCss <<< "$line"
+
+  sourceType=${sourceType%$'\r'}
+  library=${library%$'\r'}
+  version=${version%$'\r'}
+  url=${url%$'\r'}
+  docId=${docId%$'\r'}
+  contentCss=${contentCss%$'\r'}
+  removeCss=${removeCss%$'\r'}
 
   sourceType=${sourceType:-$DEFAULT_SOURCE_TYPE}
   library=${library:-$DEFAULT_LIBRARY}
@@ -260,7 +269,7 @@ function main() {
       continue
     fi
 
-    if ! parse_tsv_line "$line"; then
+    if ! parse_csv_line "$line"; then
       ((errors++))
       if [[ "$FAIL_FAST" == "true" ]]; then
         echo "Arrêt en mode fail-fast (ligne $line_no)." >&2

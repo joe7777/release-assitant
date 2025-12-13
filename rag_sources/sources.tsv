@@ -1,4 +1,0 @@
-# sourceType	library	version	url	docId	contentCss	removeCss
-SPRING_RELEASE_NOTE	spring-boot	3.3.0	https://docs.spring.io/spring-boot/docs/3.3.0/reference/html/release-notes.html	spring-boot-3-3-0-release-notes	main.content	navbar,footer,.toc
-SPRING_RELEASE_NOTE	spring-security	6.3.0	https://docs.spring.io/spring-security/reference/migration/index.html	spring-security-6-3-migration	main article	head,.breadcrumbs
-JAVA_RELEASE_NOTE	java	21	https://www.oracle.com/java/technologies/javase/21-relnote-issues.html	java-21-release-notes	#main-content	#nav,.masthead,.global-footer

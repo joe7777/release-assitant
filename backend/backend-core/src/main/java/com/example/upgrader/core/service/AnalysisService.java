@@ -6,6 +6,7 @@ import com.example.upgrader.core.llm.LlmClient;
 import com.example.upgrader.core.model.Analysis;
 import com.example.upgrader.core.model.AnalysisStatus;
 import com.example.upgrader.core.model.Change;
+import com.example.upgrader.core.model.DependencyScope;
 import com.example.upgrader.core.model.Effort;
 import com.example.upgrader.core.model.Project;
 import com.example.upgrader.core.repository.AnalysisRepository;
@@ -40,6 +41,8 @@ public class AnalysisService {
         analysis.setProject(project);
         analysis.setSpringVersionTarget(command.getSpringVersionTarget());
         analysis.setLlmModel(command.getLlmModel());
+        DependencyScope scope = command.getDependencyScope() != null ? command.getDependencyScope() : DependencyScope.ALL;
+        analysis.setDependencyScope(scope);
         analysis.setStatus(AnalysisStatus.PENDING);
         analysis.setCreatedAt(LocalDateTime.now());
 
