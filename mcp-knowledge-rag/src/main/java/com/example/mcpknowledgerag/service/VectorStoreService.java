@@ -1,6 +1,5 @@
 package com.example.mcpknowledgerag.service;
 
-import com.example.mcpknowledgerag.dto.IngestRequest;
 import com.example.mcpknowledgerag.dto.SearchFilters;
 import com.example.mcpknowledgerag.dto.SearchRequest;
 import com.example.mcpknowledgerag.dto.SearchResultItem;
@@ -47,25 +46,41 @@ public class VectorStoreService {
         }
     }
 
-    public void upsert(List<Double> vector, IngestRequest request) {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("content", request.getContent());
-        payload.put("sourceType", request.getSourceType().name());
-        payload.put("version", request.getVersion());
-        if (request.getLibrary() != null && !request.getLibrary().isBlank()) {
-            payload.put("library", request.getLibrary());
-        }
-        if (request.getUrl() != null && !request.getUrl().isBlank()) {
-            payload.put("url", request.getUrl());
-        }
-
-        Map<String, Object> point = new HashMap<>();
-        point.put("id", UUID.randomUUID().toString());
-        point.put("vector", vector);
-        point.put("payload", payload);
+    public boolean existsByDocumentHash(String documentHash) {
+        Map<String, Object> filter = Map.of("must", List.of(
+                Map.of("key", "documentHash", "match", Map.of("value", documentHash))
+        ));
 
         Map<String, Object> body = new HashMap<>();
-        body.put("points", List.of(point));
+        body.put("filter", filter);
+        body.put("limit", 1);
+        body.put("with_payload", false);
+        body.put("with_vectors", false);
+
+        ScrollResponse response = restClient.post()
+                .uri("/collections/{collection}/points/scroll", collectionName)
+                .body(body)
+                .retrieve()
+                .body(ScrollResponse.class);
+
+        return response != null
+                && response.result != null
+                && response.result.points != null
+                && !response.result.points.isEmpty();
+    }
+
+    public void upsertChunks(List<Point> points) {
+        List<Map<String, Object>> mappedPoints = new ArrayList<>();
+        for (Point point : points) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", UUID.randomUUID().toString());
+            map.put("vector", point.vector());
+            map.put("payload", point.payload());
+            mappedPoints.add(map);
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("points", mappedPoints);
 
         restClient.put()
                 .uri("/collections/{collection}/points?wait=true", collectionName)
@@ -148,6 +163,33 @@ public class VectorStoreService {
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    public record Point(List<Double> vector, Map<String, Object> payload) {
+    }
+
+    private static class ScrollResponse {
+        private ScrollResult result;
+
+        public ScrollResult getResult() {
+            return result;
+        }
+
+        public void setResult(ScrollResult result) {
+            this.result = result;
+        }
+    }
+
+    private static class ScrollResult {
+        private List<Map<String, Object>> points;
+
+        public List<Map<String, Object>> getPoints() {
+            return points;
+        }
+
+        public void setPoints(List<Map<String, Object>> points) {
+            this.points = points;
+        }
     }
 
     private static class SearchResponse {

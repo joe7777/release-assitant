@@ -71,6 +71,7 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 
 ## Ingestion des connaissances RAG (offline)
 - Le script `scripts/ingest-rag.zsh` prépare les release notes et guides de migration pour `mcp-knowledge-rag` (POST `/ingest`).
+- L'endpoint `/ingest` est idempotent : chaque document est identifié par un hash SHA-256 calculé à partir du couple (sourceType, library, version) et du contenu normalisé. Un document déjà présent est ignoré, ce qui évite les doublons et limite les appels d'embeddings OpenAI/Qdrant.
 - Il s'exécute hors analyse pour éviter tout impact sur les calculs en cours et réduire les appels à OpenAI.
 - Variables attendues :
   - `RAG_BASE_URL` (ex: `http://localhost:8082` via docker-compose)
