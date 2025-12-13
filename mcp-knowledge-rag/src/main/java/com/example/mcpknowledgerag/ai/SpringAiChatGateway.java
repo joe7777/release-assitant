@@ -6,7 +6,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.ChatOptionsBuilder;
 
+import java.util.List;
 import java.util.Objects;
 
 public class SpringAiChatGateway implements ChatGateway {
@@ -21,13 +23,15 @@ public class SpringAiChatGateway implements ChatGateway {
 
     @Override
     public String generateAnalysisJson(String prompt) {
+        ChatOptions chatOptions = ChatOptionsBuilder.builder()
+                .withModel(chatProperties.getModel())
+                .withTemperature(chatProperties.getTemperature())
+                .withMaxTokens(chatProperties.getMaxOutputTokens())
+                .build();
+
         Prompt chatPrompt = new Prompt(
-                new UserMessage(Objects.requireNonNullElse(prompt, "")),
-                ChatOptions.builder()
-                        .withModel(chatProperties.getModel())
-                        .withTemperature(chatProperties.getTemperature())
-                        .withMaxTokens(chatProperties.getMaxOutputTokens())
-                        .build()
+                List.of(new UserMessage(Objects.requireNonNullElse(prompt, ""))),
+                chatOptions
         );
 
         ChatResponse response = chatModel.call(chatPrompt);
