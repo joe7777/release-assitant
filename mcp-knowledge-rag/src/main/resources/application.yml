@@ -5,11 +5,41 @@ qdrant:
   url: ${QDRANT_URL:http://localhost:6333}
   collection: knowledge-base
 
-openai:
-  api:
-    key: ${OPENAI_API_KEY:}
-    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
-    embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+app:
+  ai:
+    provider: ${APP_AI_PROVIDER:ollama}
+    chat:
+      model: ${APP_AI_CHAT_MODEL:llama3.1:8b}
+      temperature: ${APP_AI_CHAT_TEMPERATURE:0}
+      max-output-tokens: ${APP_AI_MAX_OUTPUT_TOKENS:2048}
+    embedding:
+      model: ${APP_AI_EMBEDDING_MODEL:nomic-embed-text}
+
+spring:
+  ai:
+    ollama:
+      enabled: true
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${APP_AI_CHAT_MODEL:llama3.1:8b}
+          temperature: ${APP_AI_CHAT_TEMPERATURE:0}
+          max-tokens: ${APP_AI_MAX_OUTPUT_TOKENS:2048}
+      embedding:
+        options:
+          model: ${APP_AI_EMBEDDING_MODEL:nomic-embed-text}
+    openai:
+      enabled: false
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: ${APP_AI_CHAT_TEMPERATURE:0}
+          max-tokens: ${APP_AI_MAX_OUTPUT_TOKENS:2048}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
 
 logging:
   level:
