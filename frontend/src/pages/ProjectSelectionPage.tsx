@@ -2,7 +2,16 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createAnalysis } from '../api/client';
 
-const springFiveTargets = ['5.0', '5.1', '5.2', '5.3'];
+const springFiveMinorPatchCounts: Record<string, number> = {
+  '5.0': 22,
+  '5.1': 20,
+  '5.2': 25,
+  '5.3': 38,
+};
+
+const springFiveTargets = Object.entries(springFiveMinorPatchCounts).flatMap(([minor, maxPatch]) =>
+  Array.from({ length: maxPatch + 1 }, (_, patch) => `${minor}.${patch}`)
+);
 const llmModels = ['gpt-4o', 'gpt-4o-mini'];
 
 function ProjectSelectionPage() {
