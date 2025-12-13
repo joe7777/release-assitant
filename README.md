@@ -64,6 +64,22 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
    - Qdrant : http://localhost:6333
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
+## Ingestion des connaissances RAG (offline)
+- Le script `scripts/ingest-rag.zsh` prépare les release notes et guides de migration pour `mcp-knowledge-rag` (POST `/ingest`).
+- Il s'exécute hors analyse pour éviter tout impact sur les calculs en cours et réduire les appels à OpenAI.
+- Variables attendues :
+  - `RAG_BASE_URL` (ex: `http://localhost:8082` via docker-compose)
+  - `RAG_API_KEY` (optionnel si l'API est protégée)
+  - `DRY_RUN` (`true/false`, permet d'afficher les payloads sans appeler l'API)
+
+Exemple d'exécution :
+```bash
+export RAG_BASE_URL="http://localhost:8082"
+export RAG_API_KEY="token-optionnel" # optionnel
+DRY_RUN=true ./scripts/ingest-rag.zsh   # vérifie les payloads
+./scripts/ingest-rag.zsh                # ingère réellement dans Qdrant
+```
+
 ## Endpoints principaux du backend
 - `POST /analyses` : lancer une nouvelle analyse à partir d'un repo et d'une version cible.
 - `GET /analyses` : lister les analyses déjà enregistrées.
