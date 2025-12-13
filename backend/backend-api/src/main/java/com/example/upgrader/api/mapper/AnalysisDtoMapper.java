@@ -7,6 +7,7 @@ import com.example.upgrader.api.dto.CreateAnalysisRequest;
 import com.example.upgrader.core.command.CreateAnalysisCommand;
 import com.example.upgrader.core.model.Analysis;
 import com.example.upgrader.core.model.Change;
+import com.example.upgrader.core.model.DependencyScope;
 import com.example.upgrader.core.model.Effort;
 
 import java.time.format.DateTimeFormatter;
@@ -28,6 +29,7 @@ public class AnalysisDtoMapper {
         command.setSpringVersionTarget(request.getSpringVersionTarget());
         command.setLlmModel(request.getLlmModel());
         command.setGitTokenId(request.getGitTokenId());
+        command.setDependencyScope(resolveDependencyScope(request.getDependencyScope()));
         return command;
     }
 
@@ -38,6 +40,7 @@ public class AnalysisDtoMapper {
         response.setSpringVersionCurrent(analysis.getSpringVersionCurrent());
         response.setSpringVersionTarget(analysis.getSpringVersionTarget());
         response.setLlmModel(analysis.getLlmModel());
+        response.setDependencyScope(analysis.getDependencyScope() != null ? analysis.getDependencyScope().name() : null);
         response.setStatus(analysis.getStatus() != null ? analysis.getStatus().name() : null);
         response.setTotalWorkpoints(extractTotalWorkpoints(analysis.getEffort()));
         response.setCreatedAt(analysis.getCreatedAt() != null ? analysis.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME) : null);
@@ -55,6 +58,7 @@ public class AnalysisDtoMapper {
         response.setSpringVersionCurrent(analysis.getSpringVersionCurrent());
         response.setSpringVersionTarget(analysis.getSpringVersionTarget());
         response.setLlmModel(analysis.getLlmModel());
+        response.setDependencyScope(analysis.getDependencyScope() != null ? analysis.getDependencyScope().name() : null);
         response.setStatus(analysis.getStatus() != null ? analysis.getStatus().name() : null);
         response.setTotalWorkpoints(extractTotalWorkpoints(analysis.getEffort()));
         response.setCreatedAt(analysis.getCreatedAt() != null ? analysis.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME) : null);
@@ -65,6 +69,17 @@ public class AnalysisDtoMapper {
 
     private static Integer extractTotalWorkpoints(Effort effort) {
         return effort != null ? effort.getTotalWorkpoints() : null;
+    }
+
+    private static DependencyScope resolveDependencyScope(String rawScope) {
+        if (rawScope == null || rawScope.isBlank()) {
+            return DependencyScope.ALL;
+        }
+        try {
+            return DependencyScope.valueOf(rawScope);
+        } catch (IllegalArgumentException ex) {
+            return DependencyScope.ALL;
+        }
     }
 
     private static Map<String, Integer> extractEffortMap(Effort effort) {

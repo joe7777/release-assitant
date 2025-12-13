@@ -1,6 +1,7 @@
 package com.example.upgrader.infra.entity;
 
 import com.example.upgrader.core.model.AnalysisStatus;
+import com.example.upgrader.core.model.DependencyScope;
 import jakarta.persistence.Column;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
@@ -42,6 +43,10 @@ public class Analysis {
 
     @Column
     private String llmModel;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    private DependencyScope dependencyScope;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -99,6 +104,14 @@ public class Analysis {
 
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
+    }
+
+    public DependencyScope getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(DependencyScope dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 
     public AnalysisStatus getStatus() {

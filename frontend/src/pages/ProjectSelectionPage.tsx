@@ -4,6 +4,10 @@ import { createAnalysis } from '../api/client';
 
 const springFiveTargets = Array.from({ length: 11 }, (_, index) => `5.3.${index + 7}`);
 const llmModels = ['gpt-4o', 'gpt-4o-mini'];
+const dependencyScopes: Array<{ value: 'ALL' | 'SPRING_ONLY'; label: string }> = [
+  { value: 'ALL', label: 'Toutes les dépendances' },
+  { value: 'SPRING_ONLY', label: 'Dépendances Spring uniquement' }
+];
 
 function ProjectSelectionPage() {
   const navigate = useNavigate();
@@ -12,12 +16,13 @@ function ProjectSelectionPage() {
   const [branch, setBranch] = useState('main');
   const [springVersionTarget, setSpringVersionTarget] = useState(springFiveTargets[0]);
   const [llmModel, setLlmModel] = useState(llmModels[0]);
+  const [dependencyScope, setDependencyScope] = useState<'ALL' | 'SPRING_ONLY'>(dependencyScopes[0].value);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isFormValid = useMemo(
-    () => Boolean(projectGitUrl && projectName && branch && springVersionTarget && llmModel),
-    [projectGitUrl, projectName, branch, springVersionTarget, llmModel]
+    () => Boolean(projectGitUrl && projectName && branch && springVersionTarget && llmModel && dependencyScope),
+    [projectGitUrl, projectName, branch, springVersionTarget, llmModel, dependencyScope]
   );
 
   const handleSubmit = async (event: FormEvent) => {
@@ -27,7 +32,7 @@ function ProjectSelectionPage() {
     setError(null);
 
     try {
-      const created = await createAnalysis({ projectGitUrl, projectName, branch, springVersionTarget, llmModel });
+      const created = await createAnalysis({ projectGitUrl, projectName, branch, springVersionTarget, llmModel, dependencyScope });
       navigate(`/analyses/${created.id}`);
     } catch (err) {
       console.error(err);
@@ -95,6 +100,21 @@ function ProjectSelectionPage() {
             {llmModels.map((model) => (
               <option key={model} value={model}>
                 {model}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="dependencyScope">Portée de l'analyse des dépendances</label>
+          <select
+            id="dependencyScope"
+            value={dependencyScope}
+            onChange={(event) => setDependencyScope(event.target.value as 'ALL' | 'SPRING_ONLY')}
+          >
+            {dependencyScopes.map((scope) => (
+              <option key={scope.value} value={scope.value}>
+                {scope.label}
               </option>
             ))}
           </select>

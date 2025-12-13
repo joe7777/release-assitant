@@ -36,6 +36,7 @@ type AnalysisPayload = {
   branch: string;
   springVersionTarget: string;
   llmModel: string;
+  dependencyScope: 'ALL' | 'SPRING_ONLY';
 };
 
 export type Analysis = {
@@ -46,6 +47,7 @@ export type Analysis = {
   llmModel?: string;
   status: string;
   totalWorkpoints: number;
+  dependencyScope?: 'ALL' | 'SPRING_ONLY';
 };
 
 export type AnalysisDetail = Analysis & {

@@ -64,7 +64,8 @@ public class McpLlmClient implements LlmClient {
                 analysis.getProject().getGitUrl(),
                 analysis.getProject().getBranch(),
                 analysis.getProject().getGitTokenId(),
-                analysis.getLlmModel()
+                analysis.getLlmModel(),
+                analysis.getDependencyScope() != null ? analysis.getDependencyScope().name() : null
         );
 
         try {

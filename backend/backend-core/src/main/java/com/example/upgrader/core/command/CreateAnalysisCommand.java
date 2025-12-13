@@ -1,5 +1,7 @@
 package com.example.upgrader.core.command;
 
+import com.example.upgrader.core.model.DependencyScope;
+
 public class CreateAnalysisCommand {
     private String projectGitUrl;
     private String projectName;
@@ -7,6 +9,7 @@ public class CreateAnalysisCommand {
     private String springVersionTarget;
     private String llmModel;
     private String gitTokenId;
+    private DependencyScope dependencyScope;
 
     public String getProjectGitUrl() {
         return projectGitUrl;
@@ -54,5 +57,13 @@ public class CreateAnalysisCommand {
 
     public void setGitTokenId(String gitTokenId) {
         this.gitTokenId = gitTokenId;
+    }
+
+    public DependencyScope getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(DependencyScope dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 }

@@ -9,6 +9,7 @@ public class AnalysisDetailResponse {
     private String springVersionCurrent;
     private String springVersionTarget;
     private String llmModel;
+    private String dependencyScope;
     private String status;
     private Integer totalWorkpoints;
     private String createdAt;
@@ -53,6 +54,14 @@ public class AnalysisDetailResponse {
 
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
+    }
+
+    public String getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(String dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 
     public String getStatus() {

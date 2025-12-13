@@ -10,6 +10,7 @@ public class Analysis {
     private String springVersionCurrent;
     private String springVersionTarget;
     private String llmModel;
+    private DependencyScope dependencyScope;
     private AnalysisStatus status;
     private List<Change> changes = new ArrayList<>();
     private Effort effort;
@@ -53,6 +54,14 @@ public class Analysis {
 
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
+    }
+
+    public DependencyScope getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(DependencyScope dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 
     public AnalysisStatus getStatus() {

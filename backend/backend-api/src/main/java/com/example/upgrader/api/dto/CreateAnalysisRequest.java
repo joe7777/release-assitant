@@ -7,6 +7,7 @@ public class CreateAnalysisRequest {
     private String springVersionTarget;
     private String llmModel;
     private String gitTokenId;
+    private String dependencyScope;
 
     public String getProjectGitUrl() {
         return projectGitUrl;
@@ -54,5 +55,13 @@ public class CreateAnalysisRequest {
 
     public void setGitTokenId(String gitTokenId) {
         this.gitTokenId = gitTokenId;
+    }
+
+    public String getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(String dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 }

@@ -5,15 +5,17 @@ public class McpAnalyzeRequest {
     private String branch;
     private String gitToken;
     private String llmModel;
+    private String dependencyScope;
 
     public McpAnalyzeRequest() {
     }
 
-    public McpAnalyzeRequest(String repoUrl, String branch, String gitToken, String llmModel) {
+    public McpAnalyzeRequest(String repoUrl, String branch, String gitToken, String llmModel, String dependencyScope) {
         this.repoUrl = repoUrl;
         this.branch = branch;
         this.gitToken = gitToken;
         this.llmModel = llmModel;
+        this.dependencyScope = dependencyScope;
     }
 
     public String getRepoUrl() {
@@ -46,5 +48,13 @@ public class McpAnalyzeRequest {
 
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
+    }
+
+    public String getDependencyScope() {
+        return dependencyScope;
+    }
+
+    public void setDependencyScope(String dependencyScope) {
+        this.dependencyScope = dependencyScope;
     }
 }
