@@ -4,6 +4,7 @@ import com.example.mcpknowledgerag.config.AppAiProperties;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.ChatOptions;
 import org.springframework.ai.chat.prompt.DefaultChatOptionsBuilder;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptOptions;
@@ -23,10 +24,10 @@ public class SpringAiChatGateway implements ChatGateway {
 
     @Override
     public String generateAnalysisJson(String prompt) {
-        PromptOptions chatOptions = DefaultChatOptionsBuilder.builder()
-                .withModel(chatProperties.getModel())
-                .withTemperature(chatProperties.getTemperature())
-                .withMaxTokens(chatProperties.getMaxOutputTokens())
+        ChatOptions chatOptions = new DefaultChatOptionsBuilder()
+                .model(chatProperties.getModel())
+                .temperature(chatProperties.getTemperature())
+                .maxTokens(chatProperties.getMaxOutputTokens())
                 .build();
 
         Prompt chatPrompt = new Prompt(
