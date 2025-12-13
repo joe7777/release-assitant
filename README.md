@@ -29,7 +29,37 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 - Docker et Docker Compose
 - Java 21 et Maven 3.9+
 - Node.js 18+ et npm
-- Variable d'environnement `OPENAI_API_KEY` pour le LLM
+- Variable d'environnement `OPENAI_API_KEY` uniquement si vous activez le provider OpenAI (profil `prod`).
+
+## Fournisseurs LLM/Embeddings (Spring AI)
+- Abstraction unique via `ChatGateway` et `EmbeddingGateway`, implémentée avec Spring AI.
+- Provider **par défaut** : Ollama (modèle chat `llama3.1:8b`, embeddings `nomic-embed-text`).
+- Provider **prod** : OpenAI (`gpt-4o-mini` par défaut, embeddings `text-embedding-3-small`).
+
+### Local LLM (Ollama)
+1. Démarrer via Docker Compose (inclut le service `ollama` sur `11434`)
+   ```bash
+   docker-compose up --build
+   ```
+2. Télécharger les modèles nécessaires :
+   ```bash
+   docker-compose exec ollama ollama pull llama3.1:8b
+   docker-compose exec ollama ollama pull nomic-embed-text
+   ```
+3. Le profil `local` ou la propriété `APP_AI_PROVIDER=ollama` sélectionnent automatiquement les endpoints Ollama.
+
+### Production (OpenAI)
+1. Exporter la clé API :
+   ```bash
+   export OPENAI_API_KEY="sk-..."
+   ```
+2. Activer le profil `prod` ou définir `APP_AI_PROVIDER=openai`.
+3. Les modèles peuvent être personnalisés via `OPENAI_CHAT_MODEL` et `OPENAI_EMBEDDING_MODEL`.
+
+### Basculer de provider
+- Par propriété : `APP_AI_PROVIDER=ollama|openai` (par défaut : `ollama`).
+- Par profil Spring : `SPRING_PROFILES_ACTIVE=local|prod`.
+- Les configurations sont regroupées dans `application.yml` + overlays `application-local.yml` et `application-prod.yml`.
 
 ## Build et exécution locale
 1. **Backend**

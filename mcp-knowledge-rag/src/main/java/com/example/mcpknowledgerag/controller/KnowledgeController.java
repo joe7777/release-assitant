@@ -1,12 +1,12 @@
 package com.example.mcpknowledgerag.controller;
 
+import com.example.mcpknowledgerag.ai.EmbeddingGateway;
 import com.example.mcpknowledgerag.dto.IngestRequest;
 import com.example.mcpknowledgerag.dto.IngestResponse;
 import com.example.mcpknowledgerag.dto.SearchRequest;
 import com.example.mcpknowledgerag.dto.SearchResponse;
 import com.example.mcpknowledgerag.dto.SearchResultItem;
 import com.example.mcpknowledgerag.service.IngestionService;
-import com.example.mcpknowledgerag.service.EmbeddingService;
 import com.example.mcpknowledgerag.service.VectorStoreService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -19,11 +19,11 @@ import java.util.List;
 @RestController
 public class KnowledgeController {
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingGateway embeddingService;
     private final VectorStoreService vectorStoreService;
     private final IngestionService ingestionService;
 
-    public KnowledgeController(EmbeddingService embeddingService, VectorStoreService vectorStoreService, IngestionService ingestionService) {
+    public KnowledgeController(EmbeddingGateway embeddingService, VectorStoreService vectorStoreService, IngestionService ingestionService) {
         this.embeddingService = embeddingService;
         this.vectorStoreService = vectorStoreService;
         this.ingestionService = ingestionService;

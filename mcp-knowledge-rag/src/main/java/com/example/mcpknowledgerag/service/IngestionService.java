@@ -1,5 +1,6 @@
 package com.example.mcpknowledgerag.service;
 
+import com.example.mcpknowledgerag.ai.EmbeddingGateway;
 import com.example.mcpknowledgerag.dto.IngestRequest;
 import com.example.mcpknowledgerag.dto.IngestResponse;
 import com.example.mcpknowledgerag.util.HashingUtils;
@@ -21,11 +22,11 @@ public class IngestionService {
     private static final Logger LOGGER = LoggerFactory.getLogger(IngestionService.class);
     private static final int MAX_CHUNK_SIZE = 1000;
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingGateway embeddingService;
     private final VectorStoreService vectorStoreService;
     private final ConcurrentMap<String, ReentrantLock> documentLocks = new ConcurrentHashMap<>();
 
-    public IngestionService(EmbeddingService embeddingService, VectorStoreService vectorStoreService) {
+    public IngestionService(EmbeddingGateway embeddingService, VectorStoreService vectorStoreService) {
         this.embeddingService = embeddingService;
         this.vectorStoreService = vectorStoreService;
     }

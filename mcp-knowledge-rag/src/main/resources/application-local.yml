@@ -1,0 +1,11 @@
+app:
+  ai:
+    provider: ollama
+
+spring:
+  ai:
+    ollama:
+      enabled: true
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    openai:
+      enabled: false

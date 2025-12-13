@@ -60,13 +60,23 @@ services:
     build: ./mcp-knowledge-rag
     environment:
       QDRANT_URL: http://vector-db:6333
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      APP_AI_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      SPRING_PROFILES_ACTIVE: local
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007"
     depends_on:
       - vector-db
+      - ollama
     ports:
       - "8081:8081"
       - "5007:5007"
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
 
   mcp-methodology:
     build: ./mcp-methodology
@@ -79,3 +89,4 @@ services:
 volumes:
   postgres-data:
   qdrant-data:
+  ollama-data:
