@@ -9,6 +9,7 @@ public class Analysis {
     private Project project;
     private String springVersionCurrent;
     private String springVersionTarget;
+    private String llmModel;
     private AnalysisStatus status;
     private List<Change> changes = new ArrayList<>();
     private Effort effort;
@@ -44,6 +45,14 @@ public class Analysis {
 
     public void setSpringVersionTarget(String springVersionTarget) {
         this.springVersionTarget = springVersionTarget;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public AnalysisStatus getStatus() {

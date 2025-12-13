@@ -5,6 +5,7 @@ import java.util.List;
 
 public class McpComputeEffortRequest {
     private List<ChangeInput> changes = new ArrayList<>();
+    private String llmModel;
 
     public McpComputeEffortRequest() {
     }
@@ -19,6 +20,14 @@ public class McpComputeEffortRequest {
 
     public void setChanges(List<ChangeInput> changes) {
         this.changes = changes;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public static class ChangeInput {

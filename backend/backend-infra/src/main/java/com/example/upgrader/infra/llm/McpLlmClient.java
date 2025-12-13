@@ -42,6 +42,7 @@ public class McpLlmClient implements LlmClient {
         LlmAnalysisResult result = new LlmAnalysisResult();
         result.setAnalysisId(String.valueOf(analysis.getId()));
         result.setSpringVersionTarget(analysis.getSpringVersionTarget());
+        result.setLlmModel(analysis.getLlmModel());
 
         McpAnalyzeResponse analyzeResponse = invokeProjectAnalyzer(analysis);
         if (analyzeResponse != null) {
@@ -49,10 +50,10 @@ public class McpLlmClient implements LlmClient {
         }
 
         List<LlmAnalysisResult.SpringChange> springChanges = searchReleaseNotes(result.getSpringVersionCurrent(),
-                analysis.getSpringVersionTarget());
+                analysis.getSpringVersionTarget(), analysis.getLlmModel());
         result.setSpringChanges(springChanges);
 
-        LlmAnalysisResult.EffortResult effortResult = computeEffort(springChanges);
+        LlmAnalysisResult.EffortResult effortResult = computeEffort(springChanges, analysis.getLlmModel());
         result.setEffort(effortResult);
 
         return result;
@@ -62,7 +63,8 @@ public class McpLlmClient implements LlmClient {
         McpAnalyzeRequest payload = new McpAnalyzeRequest(
                 analysis.getProject().getGitUrl(),
                 analysis.getProject().getBranch(),
-                analysis.getProject().getGitTokenId()
+                analysis.getProject().getGitTokenId(),
+                analysis.getLlmModel()
         );
 
         try {
@@ -78,7 +80,7 @@ public class McpLlmClient implements LlmClient {
         }
     }
 
-    private List<LlmAnalysisResult.SpringChange> searchReleaseNotes(String currentVersion, String targetVersion) {
+    private List<LlmAnalysisResult.SpringChange> searchReleaseNotes(String currentVersion, String targetVersion, String llmModel) {
         McpSearchRequest request = new McpSearchRequest();
         request.setQuery(String.format("Spring Boot migration from %s to %s", Objects.toString(currentVersion, "unknown"),
                 Objects.toString(targetVersion, "unknown")));
@@ -86,6 +88,7 @@ public class McpLlmClient implements LlmClient {
         request.getFilters().setSourceType("SPRING_RELEASE_NOTE");
         request.getFilters().setFromVersion(currentVersion);
         request.getFilters().setToVersion(targetVersion);
+        request.setLlmModel(llmModel);
 
         try {
             McpSearchResponse response = knowledgeClient.post()
@@ -129,7 +132,7 @@ public class McpLlmClient implements LlmClient {
         return "LOW";
     }
 
-    private LlmAnalysisResult.EffortResult computeEffort(List<LlmAnalysisResult.SpringChange> springChanges) {
+    private LlmAnalysisResult.EffortResult computeEffort(List<LlmAnalysisResult.SpringChange> springChanges, String llmModel) {
         if (springChanges == null || springChanges.isEmpty()) {
             return null;
         }
@@ -139,6 +142,7 @@ public class McpLlmClient implements LlmClient {
                         .map(change -> new McpComputeEffortRequest.ChangeInput(change.getId(), ChangeType.SPRING.name(), change.getSeverity()))
                         .collect(Collectors.toList())
         );
+        request.setLlmModel(llmModel);
 
         try {
             McpComputeEffortResponse response = methodologyClient.post()

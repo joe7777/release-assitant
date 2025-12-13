@@ -40,6 +40,9 @@ public class Analysis {
     @Column(nullable = false)
     private String springVersionTarget;
 
+    @Column
+    private String llmModel;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AnalysisStatus status;
@@ -88,6 +91,14 @@ public class Analysis {
 
     public void setSpringVersionTarget(String springVersionTarget) {
         this.springVersionTarget = springVersionTarget;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
     }
 
     public AnalysisStatus getStatus() {
