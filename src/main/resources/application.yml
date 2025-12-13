@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: mcp-knowledge-rag
+  main:
+    web-application-type: servlet
+
+qdrant:
+  url: ${QDRANT_URL:http://localhost:6333}
+  collection-name: ${QDRANT_COLLECTION:knowledge_chunks}
+
+openai:
+  api-key: ${OPENAI_API_KEY:changeme}
+  embeddings-model: ${OPENAI_EMBEDDINGS_MODEL:text-embedding-3-small}
+
+server:
+  port: 8080
