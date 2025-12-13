@@ -18,6 +18,7 @@ SELECTOR_REMOVE_CSS=${SELECTOR_REMOVE_CSS:-""}
 SOURCES_FILE=${SOURCES_FILE:-"rag_sources/sources.csv"}
 LOG_FILE=${LOG_FILE:-"logs/ingest-from-html.log"}
 RESULTS_FILE=${RESULTS_FILE:-"logs/ingest-from-html-results.jsonl"}
+HTTP_LOG_FILE=${HTTP_LOG_FILE:-"logs/ingest-from-html-http.log"}
 FAIL_FAST=${FAIL_FAST:-"false"}
 
 typeset -gA CURRENT_LINE
@@ -25,6 +26,27 @@ HAS_JQ="false"
 if command -v jq >/dev/null 2>&1; then
   HAS_JQ="true"
 fi
+
+function timestamp_utc() {
+  date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
+function log_line() {
+  local level="$1"
+  shift
+  local ts msg
+  ts=$(timestamp_utc)
+  msg="$ts [$level] $*"
+  echo "$msg" | tee -a "$LOG_FILE"
+}
+
+function log_http() {
+  local direction="$1"
+  local ts
+  ts=$(timestamp_utc)
+  shift
+  echo "$ts [$direction] $*" >> "$HTTP_LOG_FILE"
+}
 
 function require_cmd() {
   local cmd="$1"
@@ -195,13 +217,11 @@ function post_ingest() {
   local url="$2"
 
   local ts
-  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  ts=$(timestamp_utc)
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "---"
-    echo "[DRY_RUN] Appel POST $RAG_BASE_URL/ingestFromHtml pour $url"
-    echo "$payload"
-    echo "$ts DRY_RUN url=$url" >> "$LOG_FILE"
+    log_line INFO "[DRY_RUN] Appel POST $RAG_BASE_URL/ingestFromHtml pour $url"
+    log_http REQUEST "POST $RAG_BASE_URL/ingestFromHtml" "payload=$payload"
     printf '{"timestamp":"%s","url":"%s","dryRun":true,"payload":%s}\n' "$ts" "$(json_escape "$url")" "$payload" >> "$RESULTS_FILE"
     return 0
   fi
@@ -212,13 +232,23 @@ function post_ingest() {
     headers+=("-H" "Authorization: Bearer $RAG_API_KEY")
   fi
 
+  local safe_headers
+  safe_headers="Content-Type: application/json"
+  if [[ -n "$RAG_API_KEY" ]]; then
+    safe_headers+="; Authorization: Bearer ****"
+  fi
+
+  log_line INFO "Envoi requête vers $RAG_BASE_URL/ingestFromHtml (url=$url)"
+  log_line DEBUG "Corps de requête: $payload"
+  log_http REQUEST "POST $RAG_BASE_URL/ingestFromHtml" "headers=$safe_headers" "payload=$payload"
+
   local response_file
   response_file=$(mktemp)
   local http_code body
 
   if ! http_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "$RAG_BASE_URL/ingestFromHtml" "${headers[@]}" -d "$payload"); then
     echo "Erreur curl vers $RAG_BASE_URL/ingestFromHtml" >&2
-    echo "$ts curl_error url=$url" >> "$LOG_FILE"
+    log_line ERROR "Erreur curl vers $RAG_BASE_URL/ingestFromHtml pour url=$url"
     rm -f "$response_file"
     return 1
   fi
@@ -226,9 +256,11 @@ function post_ingest() {
   body=$(cat "$response_file")
   rm -f "$response_file"
 
-  echo "$ts http=$http_code url=$url" >> "$LOG_FILE"
+  log_line INFO "Réponse HTTP $http_code pour url=$url"
   local body_compact
   body_compact=$(printf '%s' "$body" | tr '\n' ' ')
+  log_line DEBUG "Corps de réponse: $body_compact"
+  log_http RESPONSE "code=$http_code" "url=$url" "body=$body_compact"
   printf '{"timestamp":"%s","url":"%s","httpCode":%s,"response":%s}\n' "$ts" "$(json_escape "$url")" "$http_code" "${body_compact:-{}}" >> "$RESULTS_FILE"
 
   summarize_response "$http_code" "$body" "$url"
@@ -251,7 +283,13 @@ function main() {
     exit 1
   fi
 
-  mkdir -p "${SOURCES_FILE:h}" logs
+  mkdir -p "${SOURCES_FILE:h}" "${LOG_FILE:h}" "${RESULTS_FILE:h}" "${HTTP_LOG_FILE:h}"
+  : > "$LOG_FILE"
+  : > "$HTTP_LOG_FILE"
+  : > "$RESULTS_FILE"
+  log_line INFO "=== Démarrage ingestion depuis HTML ==="
+  log_line INFO "Configuration: RAG_BASE_URL=$RAG_BASE_URL, DRY_RUN=$DRY_RUN, MAX_CHARS=$MAX_CHARS, DEFAULT_SOURCE_TYPE=$DEFAULT_SOURCE_TYPE"
+  log_line INFO "Fichiers: sources=$SOURCES_FILE, log=$LOG_FILE, http_log=$HTTP_LOG_FILE, résultats=$RESULTS_FILE"
 
   if [[ ! -f "$SOURCES_FILE" ]]; then
     echo "Erreur : fichier de sources introuvable : $SOURCES_FILE" >&2
@@ -271,6 +309,7 @@ function main() {
 
     if ! parse_csv_line "$line"; then
       ((errors++))
+      log_line ERROR "Ligne $line_no ignorée (CSV invalide ou URL manquante)"
       if [[ "$FAIL_FAST" == "true" ]]; then
         echo "Arrêt en mode fail-fast (ligne $line_no)." >&2
         exit 1
@@ -281,6 +320,10 @@ function main() {
     local payload selectors_remove
     selectors_remove="${CURRENT_LINE[removeCss]}"
     payload=$(build_payload "${CURRENT_LINE[contentCss]}" "$selectors_remove")
+    log_line INFO "Ligne $line_no : url=${CURRENT_LINE[url]} sourceType=${CURRENT_LINE[sourceType]} library=${CURRENT_LINE[library]} version=${CURRENT_LINE[version]}"
+    if [[ -n "$selectors_remove" ]]; then
+      log_line DEBUG "Sélecteurs de suppression: $selectors_remove"
+    fi
     if post_ingest "$payload" "${CURRENT_LINE[url]}"; then
       ((processed++))
     else
@@ -295,6 +338,8 @@ function main() {
   echo "---"
   echo "Documents traités : $processed"
   echo "Erreurs           : $errors"
+
+  log_line INFO "Traitement terminé : $processed succès, $errors erreurs"
 
   if (( errors > 0 )); then
     exit 1
