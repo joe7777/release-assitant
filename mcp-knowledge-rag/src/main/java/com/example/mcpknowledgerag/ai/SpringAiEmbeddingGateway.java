@@ -2,10 +2,11 @@ package com.example.mcpknowledgerag.ai;
 
 import com.example.mcpknowledgerag.config.AppAiProperties;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
-import org.springframework.ai.ollama.OllamaEmbeddingOptions;
+import org.springframework.ai.ollama.api.OllamaEmbeddingOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,7 +51,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
         throw new IllegalStateException("Embedding model returned no vectors");
     }
 
-    private Object buildOptions() {
+    private EmbeddingOptions buildOptions() {
         return switch (provider) {
             case OPENAI -> OpenAiEmbeddingOptions.builder()
                     .withModel(embeddingProperties.getModel())
