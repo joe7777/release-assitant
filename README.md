@@ -23,6 +23,8 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
   - `mcp-project-analyzer` pour explorer le repo, les dépendances Maven et la version actuelle de Spring Boot.
   - `mcp-knowledge-rag` pour interroger la base vectorielle (Qdrant) avec les release notes, CVE et documentation.
   - `mcp-methodology` pour appliquer le calcul de workpoints.
+  - `mcp-server` (SSE MCP) expose les tools unifiés (méthodologie, analyse Maven, ingestion/search RAG) sans encore activer de
+    tool-calling LLM.
 - **Bases de données** : PostgreSQL pour l'état des analyses, Qdrant pour le RAG.
 
 ## Prérequis
@@ -92,6 +94,7 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
    - Frontend : http://localhost:3000
    - Backend : http://localhost:8080
    - Qdrant : http://localhost:6333
+   - MCP Server : http://localhost:8085 (transport SSE `/mcp`)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
 ## Accéder à la documentation Swagger UI
@@ -100,21 +103,26 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 - Une fois les services démarrés (via Maven ou Docker Compose), ces URLs exposent le catalogue OpenAPI pour tester les endpoints et vérifier la configuration.
 
 ## Ingestion des connaissances RAG (offline)
-- Le script `scripts/ingest-rag.zsh` prépare les release notes et guides de migration pour `mcp-knowledge-rag` (POST `/ingest`).
-- L'endpoint `/ingest` est idempotent : chaque document est identifié par un hash SHA-256 calculé à partir du couple (sourceType, library, version) et du contenu normalisé. Un document déjà présent est ignoré, ce qui évite les doublons et limite les appels d'embeddings OpenAI/Qdrant.
-- Il s'exécute hors analyse pour éviter tout impact sur les calculs en cours et réduire les appels à OpenAI.
+- Le script `scripts/ingest-baseline.zsh` lit `rag_sources/sources.csv` (séparateur `;`) et appelle l'API REST interne du `mcp-server` (`/api/rag/ingest/html`).
+- L'endpoint est idempotent grâce aux métadonnées `documentHash` et `chunkHash` : une source déjà ingérée est ignorée.
 - Variables attendues :
-  - `RAG_BASE_URL` (ex: `http://localhost:8082` via docker-compose)
-  - `RAG_API_KEY` (optionnel si l'API est protégée)
-  - `DRY_RUN` (`true/false`, permet d'afficher les payloads sans appeler l'API)
+  - `RAG_BASE_URL` (ex: `http://localhost:8085` via docker-compose)
+  - `DRY_RUN` (`true/false`, affiche les payloads sans ingestion)
 
 Exemple d'exécution :
 ```bash
-export RAG_BASE_URL="http://localhost:8082"
-export RAG_API_KEY="token-optionnel" # optionnel
-DRY_RUN=true ./scripts/ingest-rag.zsh   # vérifie les payloads
-./scripts/ingest-rag.zsh                # ingère réellement dans Qdrant
+export RAG_BASE_URL="http://localhost:8085"
+DRY_RUN=true ./scripts/ingest-baseline.zsh   # vérifie les payloads
+./scripts/ingest-baseline.zsh                # ingère réellement dans Qdrant
 ```
+
+## Tester le MCP server (sans LLM)
+- Démarrer via Docker Compose (`mcp-server` écoute sur `8085`).
+- Les tools sont exposés via le transport SSE `/mcp` et via des endpoints REST pratiques :
+  - `POST /api/rag/ingest/html` pour ingérer une page.
+  - `POST /api/rag/ingest/text` pour injecter un contenu brut.
+  - `POST /api/rag/search` pour interroger Qdrant.
+- Les outils `methodology.*` et `project.*` sont déclarés avec `@McpTool` et scannés automatiquement grâce à Spring AI 1.1.2.
 
 ## Endpoints principaux du backend
 - `POST /analyses` : lancer une nouvelle analyse à partir d'un repo et d'une version cible.

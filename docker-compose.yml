@@ -27,6 +27,7 @@ services:
       MCP_PROJECT_ANALYZER_URL: http://mcp-project-analyzer:8080
       MCP_KNOWLEDGE_RAG_URL: http://mcp-knowledge-rag:8081
       MCP_METHODOLOGY_URL: http://mcp-methodology:8080
+      MCP_SERVER_URL: http://mcp-server:8085
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
     ports:
       - "8080:8080"
@@ -86,7 +87,22 @@ services:
     ports:
       - "5008:5008"
 
+  mcp-server:
+    build: ./mcp-server
+    environment:
+      QDRANT_HOST: vector-db
+      QDRANT_PORT: 6333
+      MCP_WORKSPACE_ROOT: /workspaces
+      RAG_MAX_CONTENT_LENGTH: 1048576
+    volumes:
+      - workspace-data:/workspaces
+    depends_on:
+      - vector-db
+    ports:
+      - "8085:8085"
+
 volumes:
   postgres-data:
   qdrant-data:
   ollama-data:
+  workspace-data:

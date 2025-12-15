@@ -1,0 +1,6 @@
+version: 1
+rules:
+  - "Toujours estimer les workpoints en fonction de la complexité et du risque."
+  - "Prioriser les dépendances critiques avant les refactorings mineurs."
+  - "Documenter chaque changement structurel." 
+  - "Prévoir des tests de non-régression pour les modules sensibles." 
