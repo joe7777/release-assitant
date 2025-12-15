@@ -4,7 +4,6 @@ import java.util.Objects;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.tool.ToolCallbackContext;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.beans.factory.ObjectProvider;
@@ -34,12 +33,6 @@ public class AiConfiguration {
     @ConditionalOnMissingBean
     public ChatClient chatClient(ChatModel chatModel) {
         return ChatClient.builder(chatModel).build();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ToolCallbackContext functionCallbackContext() {
-        return new ToolCallbackContext();
     }
 
     @Bean
