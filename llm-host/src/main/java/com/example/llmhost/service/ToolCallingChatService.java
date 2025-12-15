@@ -146,7 +146,7 @@ public class ToolCallingChatService {
         }
 
         private String resolveToolName() {
-            return Stream.of(
+            return Stream.<Supplier<String>>of(
                     () -> invokeIfPresent(delegate, "getToolDefinition", def -> invokeIfPresent(def, "getName", Objects::toString)),
                     () -> invokeIfPresent(delegate, "getName", Objects::toString))
                     .map(Supplier::get)
