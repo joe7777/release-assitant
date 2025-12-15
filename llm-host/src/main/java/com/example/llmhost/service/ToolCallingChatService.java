@@ -18,9 +18,9 @@ import com.example.llmhost.config.SystemPromptProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.model.tool.ToolCallback;
-import org.springframework.ai.model.tool.ToolCallbackContext;
-import org.springframework.ai.model.tool.ToolResponse;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackContext;
+import org.springframework.ai.tool.ToolResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
