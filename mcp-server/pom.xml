@@ -59,7 +59,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -67,7 +67,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-qdrant-store</artifactId>
+            <artifactId>spring-ai-starter-vector-store-qdrant</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
