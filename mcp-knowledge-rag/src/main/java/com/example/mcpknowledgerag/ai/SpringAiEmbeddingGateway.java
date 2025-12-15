@@ -26,9 +26,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
     @Override
     public List<Double> embed(String text) {
         EmbeddingResponse response = embeddingModel.embedForResponse(
-                EmbeddingRequest.builder(List.of(text))
-                        .withOptions(buildOptions())
-                        .build());
+                new EmbeddingRequest(List.of(text), buildOptions()));
 
         if (response == null || response.getResults().isEmpty()) {
             throw new IllegalStateException("Embedding model returned no vectors");
