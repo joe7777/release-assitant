@@ -13,8 +13,6 @@ import java.util.stream.Collectors;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -72,19 +70,9 @@ public class RagService {
     }
 
     public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
-        SearchRequest request = SearchRequest.query(query).withTopK(topK);
-        if (filters != null && !filters.isEmpty()) {
-            FilterExpressionBuilder builder = new FilterExpressionBuilder();
-            Filter.Expression expression = null;
-            for (Map.Entry<String, Object> entry : filters.entrySet()) {
-                Filter.Expression eq = builder.eq(entry.getKey(), entry.getValue());
-                expression = expression == null ? eq : builder.and(expression, eq);
-            }
-            if (expression != null) {
-                request = request.withFilterExpression(expression);
-            }
-        }
-        return vectorStore.similaritySearch(request).stream()
+        SearchRequest.SearchRequestBuilder requestBuilder = SearchRequest.builder().query(query).topK(topK);
+
+        return vectorStore.similaritySearch(requestBuilder.build()).stream()
                 .map(doc -> new RagSearchResult(doc.getContent(), doc.getScore(), doc.getMetadata()))
                 .collect(Collectors.toList());
     }

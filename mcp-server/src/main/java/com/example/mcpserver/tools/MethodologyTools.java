@@ -3,7 +3,7 @@ package com.example.mcpserver.tools;
 import java.io.IOException;
 import java.util.List;
 
-import org.springframework.ai.mcp.server.annotation.McpTool;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
 import com.example.mcpserver.dto.MethodologyRulesResponse;
@@ -24,12 +24,12 @@ public class MethodologyTools {
         this.objectMapper = objectMapper;
     }
 
-    @McpTool(name = "methodology.getRules", description = "Retourne les règles de méthodologie")
+    @Tool(name = "methodology.getRules", description = "Retourne les règles de méthodologie")
     public MethodologyRulesResponse getRules() throws IOException {
         return methodologyService.loadRules();
     }
 
-    @McpTool(name = "methodology.computeWorkpoints", description = "Calcule les workpoints depuis une liste de changements")
+    @Tool(name = "methodology.computeWorkpoints", description = "Calcule les workpoints depuis une liste de changements")
     public WorkpointComputationResult computeWorkpoints(String changesJson) throws IOException {
         List<WorkpointChange> changes = objectMapper.readValue(changesJson, new TypeReference<>() {
         });

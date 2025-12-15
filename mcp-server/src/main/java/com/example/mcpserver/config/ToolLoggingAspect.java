@@ -9,7 +9,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.mcp.server.annotation.McpTool;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
 @Aspect
@@ -19,7 +19,7 @@ public class ToolLoggingAspect {
     private static final Logger logger = LoggerFactory.getLogger(ToolLoggingAspect.class);
 
     @Around("@annotation(mcpTool)")
-    public Object logToolExecution(ProceedingJoinPoint pjp, McpTool mcpTool) throws Throwable {
+    public Object logToolExecution(ProceedingJoinPoint pjp, Tool mcpTool) throws Throwable {
         Instant start = Instant.now();
         String runId = UUID.randomUUID().toString();
         try {
