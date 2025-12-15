@@ -34,6 +34,8 @@ main() {
   build_java_project "mcp-methodology"
   build_java_project "mcp-project-analyzer"
   build_java_project "mcp-knowledge-rag"
+  build_java_project "mcp-server"
+  build_java_project "llm-host"
   build_frontend
 
   echo "✅ Builds terminés"

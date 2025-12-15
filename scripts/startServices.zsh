@@ -11,4 +11,4 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d backend frontend mcp-project-analyzer mcp-knowledge-rag mcp-methodology
+docker compose -f "$COMPOSE_FILE" up -d backend frontend mcp-project-analyzer mcp-knowledge-rag mcp-methodology mcp-server llm-host ollama
