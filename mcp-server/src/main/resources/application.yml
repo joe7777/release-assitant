@@ -16,7 +16,7 @@ spring:
           packages:
             - com.example.mcpserver.tools
         transport:
-          sse:
+          streamable-http:
             enabled: true
             path: /mcp
     vectorstore:
