@@ -25,7 +25,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
 
     @Override
     public List<Double> embed(String text) {
-        EmbeddingResponse response = embeddingModel.embedForResponse(
+        EmbeddingResponse response = embeddingModel.call(
                 new EmbeddingRequest(List.of(text), buildOptions()));
 
         if (response == null || response.getResults().isEmpty()) {
