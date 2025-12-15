@@ -50,7 +50,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
                     .model(embeddingProperties.getModel())
                     .build();
             case OLLAMA -> OllamaEmbeddingOptions.builder()
-                    .withModel(embeddingProperties.getModel())
+                    .model(embeddingProperties.getModel())
                     .build();
         };
     }
