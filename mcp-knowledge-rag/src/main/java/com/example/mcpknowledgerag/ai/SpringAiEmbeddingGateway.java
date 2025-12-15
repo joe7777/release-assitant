@@ -32,15 +32,10 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
             throw new IllegalStateException("Embedding model returned no vectors");
         }
 
-        List<Double> embedding = response.getResults().getFirst().getOutput();
-        if (embedding != null && !embedding.isEmpty()) {
-            return embedding;
-        }
-
-        float[] floatOutput = response.getResults().getFirst().getOutputArray();
-        if (floatOutput != null && floatOutput.length > 0) {
-            List<Double> converted = new ArrayList<>(floatOutput.length);
-            for (float value : floatOutput) {
+        float[] embedding = response.getResults().getFirst().getOutput();
+        if (embedding != null && embedding.length > 0) {
+            List<Double> converted = new ArrayList<>(embedding.length);
+            for (float value : embedding) {
                 converted.add((double) value);
             }
             return converted;
@@ -52,7 +47,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
     private EmbeddingOptions buildOptions() {
         return switch (provider) {
             case OPENAI -> OpenAiEmbeddingOptions.builder()
-                    .withModel(embeddingProperties.getModel())
+                    .model(embeddingProperties.getModel())
                     .build();
             case OLLAMA -> OllamaEmbeddingOptions.builder()
                     .withModel(embeddingProperties.getModel())
