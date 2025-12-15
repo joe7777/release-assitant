@@ -16,9 +16,16 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
                      |  knowledge,    |   +----------------+
                      |  methodology)  |
                      +----------------+
+                               ^
+                               |
+                        +-------------+
+                        |  LLM Host   |
+                        | (Spring AI) |
+                        +-------------+
 ```
-- **Frontend (React/Vite)** : saisie de l'URL du repo, du token, de la version cible et consultation des résultats.
-- **Backend (Spring Boot 3, Java 21)** : API REST, logique métier et persistence Postgres.
+- **Frontend (React/Vite)** : saisie d'un prompt libre et consultation de la réponse outillée.
+- **Backend (Spring Boot 3, Java 21)** : API REST historique (analyses), logique métier et persistence Postgres.
+- **LLM Host (Spring Boot 3.5 + Spring AI 1.1.2)** : reçoit un prompt, orchestre le modèle (Ollama ou OpenAI) et appelle les tools MCP via tool-calling.
 - **Serveurs MCP** :
   - `mcp-project-analyzer` pour explorer le repo, les dépendances Maven et la version actuelle de Spring Boot.
   - `mcp-knowledge-rag` pour interroger la base vectorielle (Qdrant) avec les release notes, CVE et documentation.
@@ -38,17 +45,22 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 - Provider **par défaut** : Ollama (modèle chat `llama3.1:8b`, embeddings `nomic-embed-text`).
 - Provider **prod** : OpenAI (`gpt-4o-mini` par défaut, embeddings `text-embedding-3-small`).
 
+### Service `llm-host`
+- Endpoint REST : `POST /chat` (ou `/runs`) avec `{ "prompt": "...", "dryRun": false }`.
+- Tool-calling MCP : project.*, rag.*, methodology.* exposés par `mcp-server`.
+- Traces : chaque réponse expose la liste des tool-calls (nom, durée, arguments). DRY_RUN force la planification sans exécution des tools.
+
 ### Local LLM (Ollama)
-1. Démarrer via Docker Compose (inclut le service `ollama` sur `11434`)
+1. Démarrer via Docker Compose (inclut `ollama` et le service `llm-host`)
    ```bash
    docker-compose up --build
    ```
-2. Télécharger les modèles nécessaires :
+2. Télécharger les modèles nécessaires (obligatoire au premier démarrage) :
    ```bash
    docker-compose exec ollama ollama pull llama3.1:8b
    docker-compose exec ollama ollama pull nomic-embed-text
    ```
-3. Le profil `local` ou la propriété `APP_AI_PROVIDER=ollama` sélectionnent automatiquement les endpoints Ollama.
+3. Le profil `local` ou la propriété `APP_AI_PROVIDER=ollama` sélectionnent automatiquement les endpoints Ollama. `llm-host` écoute sur `http://localhost:8082`.
 
 ### Production (OpenAI)
 1. Exporter la clé API :
@@ -63,23 +75,37 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 - Par profil Spring : `SPRING_PROFILES_ACTIVE=local|prod`.
 - Les configurations sont regroupées dans `application.yml` + overlays `application-local.yml` et `application-prod.yml`.
 
+Exemple de prompt côté UI/llm-host :
+```
+Voici le lien de mon projet git https://github.com/xxx/yyy. Analyse les release notes Spring Boot 3.3.3 et donne-moi un rapport,
+limite-toi aux dépendances Spring et propose des workpoints.
+```
+
 ## Build et exécution locale
-1. **Backend**
+1. **LLM Host**
+   ```bash
+   cd llm-host
+   mvn clean package
+   mvn spring-boot:run -Dspring-boot.run.profiles=local
+   ```
+   Endpoint de chat : `http://localhost:8082/chat`.
+
+2. **Backend** (optionnel si seul le prompt est utilisé)
    ```bash
    cd backend
    mvn clean package
    mvn spring-boot:run
    ```
-   Par défaut, l'API écoute sur `http://localhost:8080`.
+   Par défaut, l'API historique écoute sur `http://localhost:8080`.
 
-2. **Frontend**
+3. **Frontend**
    ```bash
    cd frontend
    npm install
    npm run build
    npm run dev -- --host --port 3000
    ```
-   L'interface est disponible sur `http://localhost:3000`.
+   L'interface est disponible sur `http://localhost:3000` et cible `llm-host` via `VITE_LLM_HOST_URL`.
 
 ## Démarrage avec Docker Compose
 1. Exporter la clé OpenAI :

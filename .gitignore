@@ -1,3 +1,5 @@
 logs/
 mcp-ingestion-ledger.json
 workspaces/
+**/target/
+frontend/node_modules/
