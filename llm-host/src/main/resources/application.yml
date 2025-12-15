@@ -1,0 +1,46 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: llm-host
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+    mcp:
+      client:
+        transport:
+          sse:
+            url: ${MCP_SERVER_URL:http://localhost:8085/mcp}
+
+app:
+  ai:
+    provider: ${APP_AI_PROVIDER:ollama}
+    ollama:
+      chat-model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+    openai:
+      chat-model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  tooling:
+    max-tool-calls: ${APP_TOOLS_MAX_CALLS:6}
+    tool-timeout-seconds: ${APP_TOOLS_TIMEOUT_SECONDS:90}
+    dry-run: ${DRY_RUN:false}
+    max-prompt-length: ${APP_MAX_PROMPT:4000}
+  safety:
+    allowlist: ${APP_RAG_ALLOWLIST:https://docs.spring.io,https://github.com}
+    rag-top-k: ${APP_RAG_TOP_K:6}
+  system-prompt: |
+    Tu es un orchestrateur Spring Boot Upgrade Assistant.
+    Rôle: décider des tool-calls MCP (project.*, rag.*, methodology.*) pour répondre.
+    Respecte les garde-fous: pas de commandes dangereuses, respect de l'allowlist pour rag.ingestFromHtml.
+    Pour le RAG limite topK à ${APP_RAG_TOP_K:6}.
+    Quand l'utilisateur demande de restreindre aux dépendances Spring, utilise project.detectSpringScope puis la méthodologie.
+    Réponse finale = 1) résumé concis, 2) bloc JSON avec les clés summary, actions, risks, workpoints.
