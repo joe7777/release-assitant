@@ -18,9 +18,9 @@ import com.example.llmhost.config.SystemPromptProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.model.function.FunctionCallback;
-import org.springframework.ai.model.function.FunctionCallbackContext;
-import org.springframework.ai.model.function.FunctionResponse;
+import org.springframework.ai.model.tool.ToolCallback;
+import org.springframework.ai.model.tool.ToolCallbackContext;
+import org.springframework.ai.model.tool.ToolResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -33,27 +33,27 @@ public class ToolCallingChatService {
     private final ChatClient chatClient;
     private final SystemPromptProvider systemPromptProvider;
     private final AppProperties properties;
-    private final List<FunctionCallback> functionCallbacks;
+    private final List<ToolCallback> functionCallbacks;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
-            FunctionCallbackContext functionCallbackContext) {
+            ToolCallbackContext functionCallbackContext) {
         this.chatClient = chatClient;
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
-        this.functionCallbacks = new ArrayList<>(functionCallbackContext.getFunctionCallbacks());
+        this.functionCallbacks = new ArrayList<>(functionCallbackContext.getToolCallbacks());
     }
 
     public ChatRunResponse run(ChatRequest request) {
         validatePrompt(request);
         List<ToolCallTrace> traces = new ArrayList<>();
-        List<FunctionCallback> callbacks = shouldUseTools(request)
+        List<ToolCallback> callbacks = shouldUseTools(request)
                 ? wrapCallbacks(traces)
                 : Collections.emptyList();
 
         var response = chatClient.prompt()
                 .system(systemPromptProvider.buildSystemPrompt())
                 .user(request.prompt())
-                .functions(callbacks)
+                .tools(callbacks)
                 .call();
 
         String content = response.content();
@@ -73,12 +73,12 @@ public class ToolCallingChatService {
         }
     }
 
-    private List<FunctionCallback> wrapCallbacks(List<ToolCallTrace> traces) {
+    private List<ToolCallback> wrapCallbacks(List<ToolCallTrace> traces) {
         ToolingProperties tooling = properties.getTooling();
         AtomicInteger counter = new AtomicInteger();
         return functionCallbacks.stream()
                 .map(delegate -> new LoggingFunctionCallback(delegate, counter, tooling.getMaxToolCalls(), traces))
-                .map(FunctionCallback.class::cast)
+                .map(ToolCallback.class::cast)
                 .toList();
     }
 
@@ -90,14 +90,14 @@ public class ToolCallingChatService {
         return null;
     }
 
-    private static class LoggingFunctionCallback implements FunctionCallback {
+    private static class LoggingFunctionCallback implements ToolCallback {
 
-        private final FunctionCallback delegate;
+        private final ToolCallback delegate;
         private final AtomicInteger counter;
         private final int maxCalls;
         private final List<ToolCallTrace> traces;
 
-        LoggingFunctionCallback(FunctionCallback delegate, AtomicInteger counter, int maxCalls, List<ToolCallTrace> traces) {
+        LoggingFunctionCallback(ToolCallback delegate, AtomicInteger counter, int maxCalls, List<ToolCallTrace> traces) {
             this.delegate = delegate;
             this.counter = counter;
             this.maxCalls = maxCalls;
@@ -115,7 +115,7 @@ public class ToolCallingChatService {
         }
 
         @Override
-        public FunctionResponse call(FunctionCallbackContext context) {
+        public ToolResponse call(ToolCallbackContext context) {
             int current = counter.incrementAndGet();
             if (current > maxCalls) {
                 throw new IllegalStateException("Maximum tool calls exceeded (" + maxCalls + ")");
@@ -123,7 +123,7 @@ public class ToolCallingChatService {
             Instant start = Instant.now();
             try {
                 LOGGER.info("Tool call #{} - {}", current, delegate.getName());
-                FunctionResponse response = delegate.call(context);
+                ToolResponse response = delegate.call(context);
                 traces.add(new ToolCallTrace(delegate.getName(), context.toString(),
                         Duration.between(start, Instant.now()).toMillis(), true, null));
                 return response;
