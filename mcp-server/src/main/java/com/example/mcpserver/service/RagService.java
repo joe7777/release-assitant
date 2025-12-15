@@ -71,7 +71,7 @@ public class RagService {
 
     public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
         return vectorStore.similaritySearch(SearchRequest.builder().query(query).topK(topK).build()).stream()
-                .map(doc -> new RagSearchResult(doc.getContent(), doc.getScore(), doc.getMetadata()))
+                .map(doc -> new RagSearchResult(doc.getText(), doc.getScore(), doc.getMetadata()))
                 .collect(Collectors.toList());
     }
 
