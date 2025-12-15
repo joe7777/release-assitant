@@ -30,8 +30,8 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
   - `mcp-project-analyzer` pour explorer le repo, les dépendances Maven et la version actuelle de Spring Boot.
   - `mcp-knowledge-rag` pour interroger la base vectorielle (Qdrant) avec les release notes, CVE et documentation.
   - `mcp-methodology` pour appliquer le calcul de workpoints.
-  - `mcp-server` (SSE MCP) expose les tools unifiés (méthodologie, analyse Maven, ingestion/search RAG) sans encore activer de
-    tool-calling LLM.
+  - `mcp-server` (MCP Streamable HTTP) expose les tools unifiés (méthodologie, analyse Maven, ingestion/search RAG) sans encore
+    activer de tool-calling LLM.
 - **Bases de données** : PostgreSQL pour l'état des analyses, Qdrant pour le RAG.
 
 ## Prérequis
@@ -120,7 +120,7 @@ limite-toi aux dépendances Spring et propose des workpoints.
    - Frontend : http://localhost:3000
    - Backend : http://localhost:8080
    - Qdrant : http://localhost:6333
-   - MCP Server : http://localhost:8085 (transport SSE `/mcp`)
+  - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
 ## Accéder à la documentation Swagger UI
@@ -144,7 +144,7 @@ DRY_RUN=true ./scripts/ingest-baseline.zsh   # vérifie les payloads
 
 ## Tester le MCP server (sans LLM)
 - Démarrer via Docker Compose (`mcp-server` écoute sur `8085`).
-- Les tools sont exposés via le transport SSE `/mcp` et via des endpoints REST pratiques :
+- Les tools sont exposés via le transport Streamable HTTP `/mcp` et via des endpoints REST pratiques :
   - `POST /api/rag/ingest/html` pour ingérer une page.
   - `POST /api/rag/ingest/text` pour injecter un contenu brut.
   - `POST /api/rag/search` pour interroger Qdrant.
