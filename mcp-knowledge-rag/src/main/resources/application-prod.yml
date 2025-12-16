@@ -6,6 +6,7 @@ spring:
   ai:
     model:
       chat: openai
+      embedding: openai
     ollama:
       enabled: false
     openai:
