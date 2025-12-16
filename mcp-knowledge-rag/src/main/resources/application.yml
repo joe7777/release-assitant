@@ -16,6 +16,9 @@ app:
       model: ${APP_AI_EMBEDDING_MODEL:nomic-embed-text}
 
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
   ai:
     ollama:
       enabled: true
