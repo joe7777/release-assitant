@@ -4,6 +4,8 @@ app:
 
 spring:
   ai:
+    model:
+      chat: openai
     ollama:
       enabled: false
     openai:
