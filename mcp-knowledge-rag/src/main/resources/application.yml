@@ -21,6 +21,7 @@ spring:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
   ai:
     model:
+      chat: ${APP_AI_PROVIDER:ollama}
       audio:
         transcription: none
     ollama:

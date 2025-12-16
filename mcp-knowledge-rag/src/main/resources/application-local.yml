@@ -4,6 +4,8 @@ app:
 
 spring:
   ai:
+    model:
+      chat: ollama
     ollama:
       enabled: true
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
