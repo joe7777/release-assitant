@@ -24,7 +24,10 @@ spring:
       chat: ${APP_AI_PROVIDER:ollama}
       embedding: ${APP_AI_PROVIDER:ollama}
       audio:
+        speech: none
         transcription: none
+      image: none
+      moderation: none
     ollama:
       enabled: true
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
