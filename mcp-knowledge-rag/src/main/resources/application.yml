@@ -22,6 +22,7 @@ spring:
   ai:
     model:
       chat: ${APP_AI_PROVIDER:ollama}
+      embedding: ${APP_AI_PROVIDER:ollama}
       audio:
         transcription: none
     ollama:
