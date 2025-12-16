@@ -20,6 +20,9 @@ spring:
     exclude:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
   ai:
+    model:
+      audio:
+        transcription: none
     ollama:
       enabled: true
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
