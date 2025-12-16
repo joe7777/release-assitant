@@ -32,6 +32,9 @@ spring:
       enabled: false
       api-key: ${OPENAI_API_KEY:}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      audio:
+        speech:
+          enabled: ${APP_AI_OPENAI_SPEECH_ENABLED:false}
       chat:
         options:
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
