@@ -5,6 +5,16 @@ logging:
   level:
     com.example.mcpserver: INFO
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,metrics"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 spring:
   application:
     name: mcp-server
@@ -19,9 +29,6 @@ spring:
           streamable-http:
             enabled: true
             path: /mcp
-      inspector:
-        enabled: true
-        path: /mcp/inspector
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:localhost}
