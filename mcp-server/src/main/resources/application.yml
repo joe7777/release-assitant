@@ -19,6 +19,9 @@ spring:
           streamable-http:
             enabled: true
             path: /mcp
+      inspector:
+        enabled: true
+        path: /mcp/inspector
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:localhost}

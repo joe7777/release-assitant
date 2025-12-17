@@ -1,11 +1,15 @@
 #!/usr/bin/env zsh
-# Script d'ingestion hors-ligne des pages HTML dans mcp-knowledge-rag via l'API /ingestFromHtml.
+# Script d'ingestion hors-ligne des pages HTML dans mcp-knowledge-rag via l'API /ingestFromHtml
+# ou via le tool MCP rag.ingestFromHtml exposé par mcp-server.
 # Utilisation :
 #   DRY_RUN=true ./scripts/ingest-from-html.zsh
+#   USE_MCP_TOOL=true MCP_BASE_URL="http://localhost:8085" ./scripts/ingest-from-html.zsh
 #   RAG_BASE_URL="http://localhost:8082" RAG_API_KEY="..." ./scripts/ingest-from-html.zsh
 set -euo pipefail
 
 RAG_BASE_URL=${RAG_BASE_URL:-"http://localhost:8082"}
+MCP_BASE_URL=${MCP_BASE_URL:-"http://localhost:8085"}
+USE_MCP_TOOL=${USE_MCP_TOOL:-"false"}
 RAG_API_KEY=${RAG_API_KEY:-""}
 DRY_RUN=${DRY_RUN:-"false"}
 MAX_CHARS=${MAX_CHARS:-"200000"}
@@ -127,23 +131,42 @@ function build_payload() {
   docEsc=$(json_escape "${CURRENT_LINE[docId]}")
   contentEsc=$(json_escape "$contentCss")
 
-  if [[ -n "$contentCss" ]]; then
-    selectors+=("\"contentCss\":\"$contentEsc\"")
-  fi
+  if [[ "$USE_MCP_TOOL" == "true" ]]; then
+    if [[ -n "$contentCss" ]]; then
+      selectors+=("\"$contentEsc\"")
+    fi
 
-  if [[ -n "$removeCssCsv" ]]; then
-    local cssEntry
-    for cssEntry in ${(s:,:)removeCssCsv}; do
-      cssEntry=${cssEntry## }
-      cssEntry=${cssEntry%% }
-      if [[ -z "$cssEntry" ]]; then
-        continue
+    if [[ -n "$removeCssCsv" ]]; then
+      local cssEntry
+      for cssEntry in ${(s:,:)removeCssCsv}; do
+        cssEntry=${cssEntry## }
+        cssEntry=${cssEntry%% }
+        if [[ -z "$cssEntry" ]]; then
+          continue
+        fi
+        cssEntry=$(json_escape "$cssEntry")
+        selectors+=("\"$cssEntry\"")
+      done
+    fi
+  else
+    if [[ -n "$contentCss" ]]; then
+      selectors+=("\"contentCss\":\"$contentEsc\"")
+    fi
+
+    if [[ -n "$removeCssCsv" ]]; then
+      local cssEntry
+      for cssEntry in ${(s:,:)removeCssCsv}; do
+        cssEntry=${cssEntry## }
+        cssEntry=${cssEntry%% }
+        if [[ -z "$cssEntry" ]]; then
+          continue
+        fi
+        cssEntry=$(json_escape "$cssEntry")
+        remove_items+=("\"$cssEntry\"")
+      done
+      if (( ${#remove_items[@]} > 0 )); then
+        selectors+=("\"removeCss\":[${(j:,:)remove_items}]")
       fi
-      cssEntry=$(json_escape "$cssEntry")
-      remove_items+=("\"$cssEntry\"")
-    done
-    if (( ${#remove_items[@]} > 0 )); then
-      selectors+=("\"removeCss\":[${(j:,:)remove_items}]")
     fi
   fi
 
@@ -157,7 +180,11 @@ function build_payload() {
   fi
 
   if (( ${#selectors[@]} > 0 )); then
-    fields+=("\"selectors\":{${(j:,:)selectors}}")
+    if [[ "$USE_MCP_TOOL" == "true" ]]; then
+      fields+=("\"selectors\":[${(j:,:)selectors}]")
+    else
+      fields+=("\"selectors\":{${(j:,:)selectors}}")
+    fi
   fi
 
   fields+=("\"maxChars\":${MAX_CHARS}")
@@ -219,36 +246,45 @@ function post_ingest() {
   local ts
   ts=$(timestamp_utc)
 
+  local target_base target_path
+  if [[ "$USE_MCP_TOOL" == "true" ]]; then
+    target_base="$MCP_BASE_URL/api/rag"
+    target_path="/ingest/html"
+  else
+    target_base="$RAG_BASE_URL"
+    target_path="/ingestFromHtml"
+  fi
+
   if [[ "$DRY_RUN" == "true" ]]; then
-    log_line INFO "[DRY_RUN] Appel POST $RAG_BASE_URL/ingestFromHtml pour $url"
-    log_http REQUEST "POST $RAG_BASE_URL/ingestFromHtml" "payload=$payload"
+    log_line INFO "[DRY_RUN] Appel POST $target_base$target_path pour $url"
+    log_http REQUEST "POST $target_base$target_path" "payload=$payload"
     printf '{"timestamp":"%s","url":"%s","dryRun":true,"payload":%s}\n' "$ts" "$(json_escape "$url")" "$payload" >> "$RESULTS_FILE"
     return 0
   fi
 
   local -a headers
   headers=("-H" "Content-Type: application/json")
-  if [[ -n "$RAG_API_KEY" ]]; then
+  if [[ "$USE_MCP_TOOL" != "true" && -n "$RAG_API_KEY" ]]; then
     headers+=("-H" "Authorization: Bearer $RAG_API_KEY")
   fi
 
   local safe_headers
   safe_headers="Content-Type: application/json"
-  if [[ -n "$RAG_API_KEY" ]]; then
+  if [[ "$USE_MCP_TOOL" != "true" && -n "$RAG_API_KEY" ]]; then
     safe_headers+="; Authorization: Bearer ****"
   fi
 
-  log_line INFO "Envoi requête vers $RAG_BASE_URL/ingestFromHtml (url=$url)"
+  log_line INFO "Envoi requête vers $target_base$target_path (url=$url)"
   log_line DEBUG "Corps de requête: $payload"
-  log_http REQUEST "POST $RAG_BASE_URL/ingestFromHtml" "headers=$safe_headers" "payload=$payload"
+  log_http REQUEST "POST $target_base$target_path" "headers=$safe_headers" "payload=$payload"
 
   local response_file
   response_file=$(mktemp)
   local http_code body
 
-  if ! http_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "$RAG_BASE_URL/ingestFromHtml" "${headers[@]}" -d "$payload"); then
-    echo "Erreur curl vers $RAG_BASE_URL/ingestFromHtml" >&2
-    log_line ERROR "Erreur curl vers $RAG_BASE_URL/ingestFromHtml pour url=$url"
+  if ! http_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "$target_base$target_path" "${headers[@]}" -d "$payload"); then
+    echo "Erreur curl vers $target_base$target_path" >&2
+    log_line ERROR "Erreur curl vers $target_base$target_path pour url=$url"
     rm -f "$response_file"
     return 1
   fi
@@ -278,9 +314,16 @@ function main() {
   require_cmd sed
   require_cmd awk
 
-  if [[ -z "$RAG_BASE_URL" ]]; then
-    echo "Erreur : RAG_BASE_URL doit être défini (ex: http://localhost:8082)." >&2
-    exit 1
+  if [[ "$USE_MCP_TOOL" == "true" ]]; then
+    if [[ -z "$MCP_BASE_URL" ]]; then
+      echo "Erreur : MCP_BASE_URL doit être défini (ex: http://localhost:8085)." >&2
+      exit 1
+    fi
+  else
+    if [[ -z "$RAG_BASE_URL" ]]; then
+      echo "Erreur : RAG_BASE_URL doit être défini (ex: http://localhost:8082)." >&2
+      exit 1
+    fi
   fi
 
   mkdir -p "${SOURCES_FILE:h}" "${LOG_FILE:h}" "${RESULTS_FILE:h}" "${HTTP_LOG_FILE:h}"
@@ -288,7 +331,11 @@ function main() {
   : > "$HTTP_LOG_FILE"
   : > "$RESULTS_FILE"
   log_line INFO "=== Démarrage ingestion depuis HTML ==="
-  log_line INFO "Configuration: RAG_BASE_URL=$RAG_BASE_URL, DRY_RUN=$DRY_RUN, MAX_CHARS=$MAX_CHARS, DEFAULT_SOURCE_TYPE=$DEFAULT_SOURCE_TYPE"
+  if [[ "$USE_MCP_TOOL" == "true" ]]; then
+    log_line INFO "Configuration: USE_MCP_TOOL=$USE_MCP_TOOL, MCP_BASE_URL=$MCP_BASE_URL, DRY_RUN=$DRY_RUN, MAX_CHARS=$MAX_CHARS, DEFAULT_SOURCE_TYPE=$DEFAULT_SOURCE_TYPE"
+  else
+    log_line INFO "Configuration: RAG_BASE_URL=$RAG_BASE_URL, DRY_RUN=$DRY_RUN, MAX_CHARS=$MAX_CHARS, DEFAULT_SOURCE_TYPE=$DEFAULT_SOURCE_TYPE"
+  fi
   log_line INFO "Fichiers: sources=$SOURCES_FILE, log=$LOG_FILE, http_log=$HTTP_LOG_FILE, résultats=$RESULTS_FILE"
 
   if [[ ! -f "$SOURCES_FILE" ]]; then
