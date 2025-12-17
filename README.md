@@ -121,6 +121,7 @@ limite-toi aux dépendances Spring et propose des workpoints.
    - Backend : http://localhost:8080
    - Qdrant : http://localhost:6333
   - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
+  - MCP Inspector : http://localhost:5173 (UI d'exploration des tools MCP)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
 ## Accéder à la documentation Swagger UI
@@ -149,6 +150,20 @@ DRY_RUN=true ./scripts/ingest-baseline.zsh   # vérifie les payloads
   - `POST /api/rag/ingest/text` pour injecter un contenu brut.
   - `POST /api/rag/search` pour interroger Qdrant.
 - Les outils `methodology.*` et `project.*` sont déclarés avec `@McpTool` et scannés automatiquement grâce à Spring AI 1.1.2.
+
+## Supervision et inspection du `mcp-server`
+- **Actuator Spring Boot** : disponible sur `http://localhost:8085/actuator`.
+  - `GET /actuator/health`, `/actuator/health/liveness` et `/actuator/health/readiness` permettent de vérifier la disponibilité du serveur MCP avant d'enchaîner les appels tools.
+  - `GET /actuator/info` expose les métadonnées de build, et `/actuator/metrics` liste les métriques disponibles.
+- **MCP Inspector** : conformément à la documentation officielle (https://modelcontextprotocol.io/docs/tools/inspector), l'UI `mcp-inspector` est incluse dans le `docker-compose`.
+  1. Lancer `docker-compose up --build` pour démarrer `mcp-server` et l'inspector.
+  2. Ouvrir http://localhost:5173 puis utiliser l'URL MCP `http://mcp-server:8085/mcp` (préconfigurée via `MCP_SERVER_URL` et accessible depuis l'UI). Depuis le navigateur hôte, vous pouvez aussi saisir `http://localhost:8085/mcp`.
+  3. L'interface permet de lister les tools `project.*`, `rag.*` et `methodology.*`, d'inspecter les schémas et de déclencher des requêtes MCP sans passer par le LLM.
+- Pour un lancement manuel en dehors de Docker Compose, suivez la documentation officielle et démarrez l'inspector en ciblant votre serveur MCP, par exemple :
+
+  ```bash
+  npx @modelcontextprotocol/inspector --server http://localhost:8085/mcp
+  ```
 
 ## Endpoints principaux du backend
 - `POST /analyses` : lancer une nouvelle analyse à partir d'un repo et d'une version cible.
