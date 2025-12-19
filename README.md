@@ -121,7 +121,7 @@ limite-toi aux dépendances Spring et propose des workpoints.
    - Backend : http://localhost:8080
    - Qdrant : http://localhost:6333
   - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
-  - MCP Inspector : http://localhost:5173 (UI d'exploration des tools MCP)
+  - MCP Inspector : http://localhost:6274 (UI d'exploration des tools MCP)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
 
 ## Accéder à la documentation Swagger UI
