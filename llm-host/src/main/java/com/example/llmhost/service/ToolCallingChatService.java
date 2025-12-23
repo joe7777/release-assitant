@@ -5,10 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,13 +18,10 @@ import com.example.llmhost.config.SystemPromptProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.tool.ToolDefinition;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 
 @Service
 public class ToolCallingChatService {
@@ -82,8 +76,7 @@ public class ToolCallingChatService {
         ToolingProperties tooling = properties.getTooling();
         AtomicInteger counter = new AtomicInteger();
         return functionCallbacks.stream()
-                .map(delegate -> LoggingFunctionCallback.wrap(delegate, counter, tooling.getMaxToolCalls(), traces))
-                .map(ToolCallback.class::cast)
+                .map(delegate -> new LoggingToolCallback(delegate, counter, tooling.getMaxToolCalls(), traces))
                 .toList();
     }
 
@@ -95,91 +88,54 @@ public class ToolCallingChatService {
         return null;
     }
 
-    private static class LoggingFunctionCallback implements InvocationHandler {
-
-        private static final List<String> CALL_METHODS = List.of("call", "execute");
-
+    private static class LoggingToolCallback implements ToolCallback {
         private final ToolCallback delegate;
         private final AtomicInteger counter;
         private final int maxCalls;
         private final List<ToolCallTrace> traces;
-        private final Supplier<String> toolNameSupplier;
+        private final String toolName;
 
-        private LoggingFunctionCallback(ToolCallback delegate, AtomicInteger counter, int maxCalls,
+        private LoggingToolCallback(ToolCallback delegate, AtomicInteger counter, int maxCalls,
                 List<ToolCallTrace> traces) {
             this.delegate = delegate;
             this.counter = counter;
             this.maxCalls = maxCalls;
             this.traces = traces;
-            this.toolNameSupplier = memoize(this::resolveToolName);
-        }
-
-        static ToolCallback wrap(ToolCallback delegate, AtomicInteger counter, int maxCalls, List<ToolCallTrace> traces) {
-            var handler = new LoggingFunctionCallback(delegate, counter, maxCalls, traces);
-            return (ToolCallback) Proxy.newProxyInstance(delegate.getClass().getClassLoader(),
-                    new Class<?>[] { ToolCallback.class }, handler);
+            this.toolName = resolveToolName();
         }
 
         @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if (CALL_METHODS.contains(method.getName())) {
-                int current = counter.incrementAndGet();
-                if (current > maxCalls) {
-                    throw new IllegalStateException("Maximum tool calls exceeded (" + maxCalls + ")");
-                }
-                Instant start = Instant.now();
-                try {
-                    LOGGER.info("Tool call #{} - {}", current, toolNameSupplier.get());
-                    Object response = method.invoke(delegate, args);
-                    traces.add(new ToolCallTrace(toolNameSupplier.get(), args != null && args.length > 0
-                            ? String.valueOf(args[0]) : "", Duration.between(start, Instant.now()).toMillis(), true, null));
-                    return response;
-                }
-                catch (Exception ex) {
-                    traces.add(new ToolCallTrace(toolNameSupplier.get(), args != null && args.length > 0
-                            ? String.valueOf(args[0]) : "", Duration.between(start, Instant.now()).toMillis(), false,
-                            ex.getMessage()));
-                    throw ex;
-                }
+        public ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            int current = counter.incrementAndGet();
+            if (current > maxCalls) {
+                throw new IllegalStateException("Maximum tool calls exceeded (" + maxCalls + ")");
             }
-            return method.invoke(delegate, args);
+            Instant start = Instant.now();
+            try {
+                LOGGER.info("Tool call #{} - {}", current, toolName);
+                String response = delegate.call(toolInput);
+                traces.add(new ToolCallTrace(toolName, toolInput == null ? "" : toolInput,
+                        Duration.between(start, Instant.now()).toMillis(), true, null));
+                return response;
+            }
+            catch (Exception ex) {
+                traces.add(new ToolCallTrace(toolName, toolInput == null ? "" : toolInput,
+                        Duration.between(start, Instant.now()).toMillis(), false, ex.getMessage()));
+                throw ex;
+            }
         }
 
         private String resolveToolName() {
-            return Stream.<Supplier<String>>of(
-                    () -> invokeIfPresent(delegate, "getToolDefinition", def -> invokeIfPresent(def, "getName", Objects::toString)),
-                    () -> invokeIfPresent(delegate, "getName", Objects::toString))
-                    .map(Supplier::get)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(delegate.getClass().getSimpleName());
-        }
-
-        private static <T> T invokeIfPresent(Object target, String methodName, java.util.function.Function<Object, T> mapper) {
-            try {
-                Method method = target.getClass().getMethod(methodName);
-                Object result = method.invoke(target);
-                return result == null ? null : mapper.apply(result);
+            ToolDefinition definition = delegate.getToolDefinition();
+            if (definition != null && StringUtils.hasText(definition.name())) {
+                return definition.name();
             }
-            catch (Exception ex) {
-                return null;
-            }
-        }
-
-        private static <T> Supplier<T> memoize(Supplier<T> supplier) {
-            return new Supplier<>() {
-                private boolean initialized;
-                private T value;
-
-                @Override
-                public T get() {
-                    if (!initialized) {
-                        value = supplier.get();
-                        initialized = true;
-                    }
-                    return value;
-                }
-            };
+            return delegate.getClass().getSimpleName();
         }
     }
 }
