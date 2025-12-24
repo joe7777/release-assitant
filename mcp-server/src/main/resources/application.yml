@@ -22,8 +22,9 @@ spring:
     mcp:
       server:
         enabled: true
-        tools:
-          packages:
+        annotation-scanner:
+          enabled: true
+          base-packages:
             - com.example.mcpserver.tools
         transport:
           streamable-http:
