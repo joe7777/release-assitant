@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.document.Document;
@@ -70,7 +71,10 @@ public class RagService {
     }
 
     public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
-        return vectorStore.similaritySearch(SearchRequest.builder().query(query).topK(topK).build()).stream()
+        int requestTopK = Math.max(1, topK * 4);
+        List<Document> results = vectorStore
+                .similaritySearch(SearchRequest.builder().query(query).topK(requestTopK).build());
+        return results.stream().filter(doc -> matchesFilters(doc, filters)).limit(topK)
                 .map(doc -> new RagSearchResult(doc.getText(), doc.getScore(), doc.getMetadata()))
                 .collect(Collectors.toList());
     }
@@ -131,5 +135,18 @@ public class RagService {
             start = Math.min(content.length(), start + step);
         }
         return docs;
+    }
+
+    private boolean matchesFilters(Document doc, Map<String, Object> filters) {
+        if (filters == null || filters.isEmpty()) {
+            return true;
+        }
+        for (Map.Entry<String, Object> entry : filters.entrySet()) {
+            Object value = doc.getMetadata().get(entry.getKey());
+            if (!Objects.equals(value, entry.getValue())) {
+                return false;
+            }
+        }
+        return true;
     }
 }

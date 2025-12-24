@@ -40,6 +40,10 @@ spring:
 
 mcp:
   workspace-root: ${MCP_WORKSPACE_ROOT:workspaces}
+  spring-source:
+    cache-root: ${MCP_SPRING_CACHE_ROOT:spring-sources}
+    default-max-files: ${SPRING_SOURCE_MAX_FILES:2000}
+    include-tests: ${SPRING_SOURCE_INCLUDE_TESTS:false}
   rag:
     allowlist:
       - https://docs.spring.io
