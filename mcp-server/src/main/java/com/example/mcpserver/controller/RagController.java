@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,7 +52,7 @@ public class RagController {
 
     @PostMapping("/ingest/spring-source")
     public ResponseEntity<SpringSourceIngestionResponse> ingestSpringSource(@RequestBody Map<String, Object> payload)
-            throws IOException {
+            throws IOException, GitAPIException {
         SpringSourceIngestionResponse response = springSourceIngestionService.ingestSpringSource(
                 (String) payload.get("version"), (List<String>) payload.get("modules"),
                 (String) payload.get("tagOrBranch"), (Boolean) payload.get("includeJavadoc"),
