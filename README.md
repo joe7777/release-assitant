@@ -6,7 +6,8 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 
 ```mermaid
 flowchart LR
-  UI[UI (prompt)] <--> API[Backend API<br/>Spring Boot]
+  UI[UI (prompt)] --> API[Backend API<br/>Spring Boot]
+  API --> UI
   UI --> LLMHost[llm-host<br/>Spring AI 1.1.2]
   LLMHost --> LLM[LLM Provider<br/>Ollama / OpenAI]
   LLMHost --> MCP[MCP Server]
