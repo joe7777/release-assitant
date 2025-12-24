@@ -3,25 +3,41 @@
 Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à estimer l'effort de migration d'une application Spring Boot vers une version cible (par exemple de 2.7.x vers 3.3.x). L'application orchestre une SPA React, un backend Spring Boot 3.x et des serveurs MCP outillés par un LLM afin de générer un rapport complet : changements attendus, impacts de code, vulnérabilités et workpoints.
 
 ## Architecture globale
+
+```mermaid
+flowchart LR
+  UI[UI (prompt)] <--> API[Backend API<br/>Spring Boot]
+  UI --> LLMHost[llm-host<br/>Spring AI 1.1.2]
+  LLMHost --> LLM[LLM Provider<br/>Ollama / OpenAI]
+  LLMHost --> MCP[MCP Server]
+  MCP --> Qdrant[(Qdrant)]
+  MCP --> Postgres[(PostgreSQL)]
+  MCP --> Git[Maven/Git]
 ```
-+-------------+        +---------------------+
-|   Frontend  | <----> |   Backend API (SB)  |----> PostgreSQL
-| React SPA   |        | controllers & core  |
-+-------------+        +----------+----------+
-                               |           |
-                               v           v
-                     +----------------+   +----------------+
-                     |  MCP Servers   |   |   Qdrant RAG   |
-                     | (analyzer,     |   | vector store   |
-                     |  knowledge,    |   +----------------+
-                     |  methodology)  |
-                     +----------------+
-                               ^
-                               |
-                        +-------------+
-                        |  LLM Host   |
-                        | (Spring AI) |
-                        +-------------+
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI
+  participant LLMHost
+  participant LLM
+  participant MCP
+  participant Qdrant
+  participant Postgres
+  participant Git
+  participant Maven
+
+  User->>UI: prompt
+  UI->>LLMHost: /chat
+  LLMHost->>LLM: completion
+  LLMHost->>MCP: tool calls (project.*, rag.*, methodology.*)
+  MCP->>Git: clone/checkout
+  MCP->>Maven: analyze
+  MCP->>Qdrant: search/ingest
+  MCP->>Postgres: read/write
+  MCP-->>LLMHost: tool results
+  LLMHost->>LLM: follow-up completion
+  LLMHost-->>UI: response
 ```
 - **Frontend (React/Vite)** : saisie d'un prompt libre et consultation de la réponse outillée.
 - **Backend (Spring Boot 3, Java 21)** : API REST historique (analyses), logique métier et persistence Postgres.
@@ -81,6 +97,38 @@ Voici le lien de mon projet git https://github.com/xxx/yyy. Analyse les release 
 limite-toi aux dépendances Spring et propose des workpoints.
 ```
 
+## MCP Tools Catalog
+Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessous est disponible via MCP tool-calling **et** via les endpoints REST `/api/*`.
+
+| Tool | Description | Inputs (JSON schema) | Outputs (JSON schema) | Notes |
+| --- | --- | --- | --- | --- |
+| `project.clone` | Clone un dépôt Git dans un workspace local. | `{"type":"object","properties":{"repoUrl":{"type":"string"},"branch":{"type":"string","nullable":true},"authRef":{"type":"string","nullable":true}},"required":["repoUrl"]}` | `{"type":"object","properties":{"workspaceId":{"type":"string"},"path":{"type":"string"}},"required":["workspaceId","path"]}` | `authRef` est un token (jamais loggué). |
+| `project.analyzeMaven` | Analyse le pom.xml et les dépendances Maven. | `{"type":"object","properties":{"workspaceId":{"type":"string"}},"required":["workspaceId"]}` | `{"type":"object","properties":{"springBootVersionDetected":{"type":"string"},"springDependencies":{"type":"array","items":{"type":"string"}},"thirdPartyDependencies":{"type":"array","items":{"type":"string"}},"javaVersionDetected":{"type":"string"}}}` | Scope Spring-only disponible via `project.detectSpringScope`. |
+| `project.indexCodeToRag` | Indexe le code source dans Qdrant avec embeddings. | `{"type":"object","properties":{"workspaceId":{"type":"string"},"options":{"type":"object","properties":{"chunkSize":{"type":"integer"},"chunkOverlap":{"type":"integer"},"normalizeWhitespace":{"type":"boolean"}}}},"required":["workspaceId"]}` | `{"type":"object","properties":{"workspaceId":{"type":"string"},"filesProcessed":{"type":"integer"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"}}}` | Utilise `mcp.rag.chunk-size` par défaut si options absentes. |
+| `project.detectSpringScope` | Filtre les dépendances Spring. | `{"type":"object","properties":{"dependencies":{"type":"array","items":{"type":"string"}}},"required":["dependencies"]}` | `{"type":"array","items":{"type":"string"}}` | Pratique pour limiter les analyses au scope Spring. |
+| `rag.ingestFromHtml` | Ingère une page HTML dans le RAG. | `{"type":"object","properties":{"url":{"type":"string"},"sourceType":{"type":"string"},"library":{"type":"string"},"version":{"type":"string"},"docId":{"type":"string"},"selectors":{"type":"array","items":{"type":"string"}}},"required":["url","sourceType","library","version"]}` | `{"type":"object","properties":{"documentHash":{"type":"string"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | `url` doit être dans l'allowlist. |
+| `rag.ingestText` | Ingère un texte brut. | `{"type":"object","properties":{"sourceType":{"type":"string"},"library":{"type":"string"},"version":{"type":"string"},"content":{"type":"string"},"url":{"type":"string"},"docId":{"type":"string"}},"required":["sourceType","library","version","content"]}` | `{"type":"object","properties":{"documentHash":{"type":"string"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | Idempotent par `documentHash`. |
+| `rag.search` | Recherche des chunks dans Qdrant. | `{"type":"object","properties":{"query":{"type":"string"},"filters":{"type":"object"},"topK":{"type":"integer"}},"required":["query"]}` | `{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"score":{"type":"number"},"metadata":{"type":"object"}}}}` | `filters` sont appliqués côté client dans `rag.findApiChanges`. |
+| `rag.ensureBaselineIngested` | Vérifie les ingestions baseline. | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"libs":{"type":"array","items":{"type":"string"}}},"required":["targetSpringVersion","libs"]}` | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"missingDocuments":{"type":"array","items":{"type":"string"}}}}` | Utilisé pour vérifier l'état des sources RAG. |
+| `rag.ingestSpringSource` | Ingère le code source Spring Framework (multi-versions). | `{"type":"object","properties":{"version":{"type":"string"},"modules":{"type":"array","items":{"type":"string"}},"tagOrBranch":{"type":"string"},"includeJavadoc":{"type":"boolean"},"maxFiles":{"type":"integer"},"force":{"type":"boolean"},"includeTests":{"type":"boolean"}},"required":["version"]}` | `{"type":"object","properties":{"version":{"type":"string"},"ref":{"type":"string"},"commit":{"type":"string"},"filesScanned":{"type":"integer"},"filesIngested":{"type":"integer"},"filesSkipped":{"type":"integer"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | Repo fixée à `spring-projects/spring-framework`. |
+| `rag.findApiChanges` | Compare les changements API via RAG entre deux versions. | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"topK":{"type":"integer"}},"required":["symbol","fromVersion","toVersion"]}` | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"summary":{"type":"string"},"fromMatches":{"type":"array","items":{"type":"object"}},"toMatches":{"type":"array","items":{"type":"object"}}}}` | V1 = comparaison RAG (pas un diff Git). |
+| `methodology.getRules` | Retourne les règles de méthodologie. | `{"type":"object","properties":{}}` | `{"type":"object","properties":{"version":{"type":"string"},"rules":{"type":"array","items":{"type":"string"}}}}` | Utilisé pour l'exposition des règles de calcul. |
+| `methodology.computeWorkpoints` | Calcule les workpoints depuis une liste de changements. | `{"type":"object","properties":{"changesJson":{"type":"string"}},"required":["changesJson"]}` | `{"type":"object","properties":{"totalWorkpoints":{"type":"integer"},"breakdown":{"type":"array","items":{"type":"object"}},"methodologyVersion":{"type":"string"}}}` | `changesJson` est une liste JSON sérialisée de `WorkpointChange`. |
+
+## Allowed LLM tool calls (garde-fous)
+- **Max tool calls par run** : `app.tooling.maxToolCalls` (défaut: 6).
+- **Timeout tool** : `app.tooling.toolTimeoutSeconds` (défaut: 90s).
+- **Allowlist HTML ingest** : `mcp.rag.allowlist` (défaut: `https://docs.spring.io`, `https://github.com`).
+- **Ingestion Spring source** : repo fixée à `https://github.com/spring-projects/spring-framework`.
+- **Max content length** : `mcp.rag.max-content-length` (défaut: 1 048 576 bytes).
+- **Chunking** : `mcp.rag.chunk-size` (défaut: 800), `mcp.rag.chunk-overlap` (défaut: 80).
+- **Limite fichiers Spring** : `mcp.spring-source.default-max-files` (défaut: 2000), override par `maxFiles`.
+
+## Exemples de prompts (Spring-only)
+- "Clone le dépôt https://github.com/acme/mon-app, détecte les dépendances Spring, puis propose les workpoints."
+- "Compare l'API de `org.springframework.web.client.RestTemplate` entre Spring Framework 6.1.5 et 6.1.6."
+- "Ingest Spring Framework 6.1.5, puis recherche les changements sur `WebClient`."
+
 ## Build et exécution locale
 1. **LLM Host**
    ```bash
@@ -120,9 +168,20 @@ limite-toi aux dépendances Spring et propose des workpoints.
    - Frontend : http://localhost:3000
    - Backend : http://localhost:8080
    - Qdrant : http://localhost:6333
-  - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
+   - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
   - MCP Inspector : http://localhost:6274 (UI d'exploration des tools MCP)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
+
+## Stockage persistant & nettoyage
+- **Volumes Docker** :
+  - `qdrant-data` : embeddings et documents RAG.
+  - `workspace-data` : clones temporaires de projets analysés.
+  - `spring-cache-data` : cache Git du repo `spring-framework`.
+- Les sources Spring peuvent représenter plusieurs centaines de Mo selon les versions ingérées.
+- Nettoyage rapide :
+  ```bash
+  docker volume rm release-assitant_qdrant-data release-assitant_workspace-data release-assitant_spring-cache-data
+  ```
 
 ## Accéder à la documentation Swagger UI
 - **Backend (API principale)** : http://localhost:8080/swagger-ui/index.html
@@ -143,13 +202,32 @@ DRY_RUN=true ./scripts/ingest-baseline.zsh   # vérifie les payloads
 ./scripts/ingest-baseline.zsh                # ingère réellement dans Qdrant
 ```
 
+### Ingestion du code source Spring Framework (offline)
+- Le script `scripts/ingest-spring-sources.zsh` lit `rag_sources/spring_versions.txt` (une version par ligne).
+- Appelle l'API REST `POST /api/rag/ingest/spring-source` du `mcp-server`.
+- Variables utiles :
+  - `RAG_BASE_URL` (ex: `http://localhost:8085`)
+  - `DRY_RUN` (`true/false`)
+  - `TAG_OR_BRANCH` (override de version, ex: `6.1.x`)
+  - `MODULES` (liste séparée par virgules, ex: `spring-core,spring-web`)
+  - `MAX_FILES`, `INCLUDE_JAVADOC`, `INCLUDE_TESTS`, `FORCE`
+
+Exemple :
+```bash
+export RAG_BASE_URL="http://localhost:8085"
+DRY_RUN=true ./scripts/ingest-spring-sources.zsh
+MODULES="spring-core,spring-web" ./scripts/ingest-spring-sources.zsh
+```
+
 ## Tester le MCP server (sans LLM)
 - Démarrer via Docker Compose (`mcp-server` écoute sur `8085`).
 - Les tools sont exposés via le transport Streamable HTTP `/mcp` et via des endpoints REST pratiques :
   - `POST /api/rag/ingest/html` pour ingérer une page.
   - `POST /api/rag/ingest/text` pour injecter un contenu brut.
+  - `POST /api/rag/ingest/spring-source` pour ingérer le code source Spring Framework.
   - `POST /api/rag/search` pour interroger Qdrant.
-- Les outils `methodology.*` et `project.*` sont déclarés avec `@McpTool` et scannés automatiquement grâce à Spring AI 1.1.2.
+  - `POST /api/rag/api-changes` pour comparer des snippets entre versions.
+- Les outils `methodology.*` et `project.*` sont déclarés avec `@Tool` et scannés automatiquement grâce à Spring AI 1.1.2.
 
 ## Supervision et inspection du `mcp-server`
 - **Actuator Spring Boot** : disponible sur `http://localhost:8085/actuator`.
