@@ -18,6 +18,8 @@ import com.example.llmhost.config.SystemPromptProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.tool.ToolDefinition;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class ToolCallingChatService {
     private final SystemPromptProvider systemPromptProvider;
     private final AppProperties properties;
     private final List<ToolCallback> functionCallbacks;
+    private final CallAdvisor loggingAdvisor;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
             List<ToolCallback> functionCallbacks) {
@@ -40,6 +43,7 @@ public class ToolCallingChatService {
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
         this.functionCallbacks = new ArrayList<>(functionCallbacks);
+        this.loggingAdvisor = new SimpleLoggerAdvisor();
     }
 
     public ChatRunResponse run(ChatRequest request) {
@@ -52,6 +56,7 @@ public class ToolCallingChatService {
         var response = chatClient.prompt()
                 .system(systemPromptProvider.buildSystemPrompt())
                 .user(request.prompt())
+                .advisors(loggingAdvisor)
                 .tools(callbacks)
                 .call();
 
