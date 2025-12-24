@@ -6,14 +6,36 @@ Spring Boot Upgrade Assistant aide les équipes à analyser un dépôt Git et à
 
 ```mermaid
 flowchart LR
-  UI[UI (prompt)] --> API[Backend API<br/>Spring Boot]
+  UI["UI (prompt)"] --> API["Backend API<br/>Spring Boot"]
   API --> UI
-  UI --> LLMHost[llm-host<br/>Spring AI 1.1.2]
-  LLMHost --> LLM[LLM Provider<br/>Ollama / OpenAI]
-  LLMHost --> MCP[MCP Server]
+  UI --> LLMHost["llm-host<br/>Spring AI 1.1.2"]
+  LLMHost --> LLM["LLM Provider<br/>Ollama / OpenAI"]
+  LLMHost --> MCP["MCP Server"]
   MCP --> Qdrant[(Qdrant)]
   MCP --> Postgres[(PostgreSQL)]
-  MCP --> Git[Maven/Git]
+  MCP --> Git["Maven/Git"]
+```
+
+```mermaid
+flowchart TB
+  subgraph Client["Frontend"]
+    UIComponent["SPA React/Vite"]
+  end
+  subgraph Services["Services"]
+    BackendComponent["Backend Spring Boot 3"]
+    LLMHostComponent["LLM Host Spring Boot 3.5"]
+    MCPComponent["MCP Server (tools)"]
+  end
+  subgraph Data["Stores"]
+    PostgresComponent[(PostgreSQL)]
+    QdrantComponent[(Qdrant)]
+  end
+
+  UIComponent --> LLMHostComponent
+  UIComponent --> BackendComponent
+  LLMHostComponent --> MCPComponent
+  MCPComponent --> PostgresComponent
+  MCPComponent --> QdrantComponent
 ```
 
 ```mermaid
