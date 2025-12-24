@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
@@ -54,7 +55,8 @@ public class RagTools {
 
     @Tool(name = "rag.ingestSpringSource", description = "Ingère le code source de Spring Framework")
     public SpringSourceIngestionResponse ingestSpringSource(String version, List<String> modules, String tagOrBranch,
-            Boolean includeJavadoc, Integer maxFiles, Boolean force, Boolean includeTests) throws IOException {
+            Boolean includeJavadoc, Integer maxFiles, Boolean force, Boolean includeTests)
+            throws IOException, GitAPIException {
         return springSourceIngestionService.ingestSpringSource(version, modules, tagOrBranch, includeJavadoc, maxFiles,
                 force, includeTests);
     }
