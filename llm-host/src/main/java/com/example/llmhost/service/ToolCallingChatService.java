@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
-import org.springframework.ai.tool.ToolDefinition;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -81,7 +81,7 @@ public class ToolCallingChatService {
         ToolingProperties tooling = properties.getTooling();
         AtomicInteger counter = new AtomicInteger();
         return functionCallbacks.stream()
-                .map(delegate -> new LoggingToolCallback(delegate, counter, tooling.getMaxToolCalls(), traces))
+                .map(delegate -> (ToolCallback) new LoggingToolCallback(delegate, counter, tooling.getMaxToolCalls(), traces))
                 .toList();
     }
 
