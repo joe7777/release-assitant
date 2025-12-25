@@ -1,15 +1,15 @@
 package com.example.mcpserver.controller;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import com.example.mcpserver.dto.ApiChangeResponse;
 import com.example.mcpserver.dto.RagIngestionResponse;
@@ -35,46 +35,57 @@ public class RagController {
     }
 
     @PostMapping("/ingest/html")
-    public ResponseEntity<RagIngestionResponse> ingestHtml(@RequestBody Map<String, Object> payload) throws IOException {
-        RagIngestionResponse response = ragService.ingestFromHtml((String) payload.get("url"),
-                (String) payload.get("sourceType"), (String) payload.get("library"), (String) payload.get("version"),
-                (String) payload.getOrDefault("docId", ""), (List<String>) payload.getOrDefault("selectors", List.of()));
-        return ResponseEntity.ok(response);
+    public Mono<ResponseEntity<RagIngestionResponse>> ingestHtml(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> ragService.ingestFromHtml((String) payload.get("url"),
+                        (String) payload.get("sourceType"), (String) payload.get("library"),
+                        (String) payload.get("version"), (String) payload.getOrDefault("docId", ""),
+                        (List<String>) payload.getOrDefault("selectors", List.of())))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping("/ingest/text")
-    public ResponseEntity<RagIngestionResponse> ingestText(@RequestBody Map<String, Object> payload) {
-        RagIngestionResponse response = ragService.ingestText((String) payload.get("sourceType"),
-                (String) payload.get("library"), (String) payload.get("version"), (String) payload.get("content"),
-                (String) payload.get("url"), (String) payload.get("docId"));
-        return ResponseEntity.ok(response);
+    public Mono<ResponseEntity<RagIngestionResponse>> ingestText(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> ragService.ingestText((String) payload.get("sourceType"),
+                        (String) payload.get("library"), (String) payload.get("version"),
+                        (String) payload.get("content"), (String) payload.get("url"), (String) payload.get("docId")))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping("/ingest/spring-source")
-    public ResponseEntity<SpringSourceIngestionResponse> ingestSpringSource(@RequestBody Map<String, Object> payload)
-            throws IOException, GitAPIException {
-        SpringSourceIngestionResponse response = springSourceIngestionService.ingestSpringSource(
-                (String) payload.get("version"), (List<String>) payload.get("modules"),
-                (String) payload.get("tagOrBranch"), (Boolean) payload.get("includeJavadoc"),
-                (Integer) payload.get("maxFiles"), (Boolean) payload.get("force"),
-                (Boolean) payload.get("includeTests"));
-        return ResponseEntity.ok(response);
+    public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringSource(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> springSourceIngestionService.ingestSpringSource(
+                        (String) payload.get("version"), (List<String>) payload.get("modules"),
+                        (String) payload.get("tagOrBranch"), (Boolean) payload.get("includeJavadoc"),
+                        (Integer) payload.get("maxFiles"), (Boolean) payload.get("force"),
+                        (Boolean) payload.get("includeTests")))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping("/search")
-    public ResponseEntity<List<RagSearchResult>> search(@RequestBody Map<String, Object> payload) {
-        String query = (String) payload.getOrDefault("query", "");
-        int topK = ((Number) payload.getOrDefault("topK", 5)).intValue();
-        Map<String, Object> filters = (Map<String, Object>) payload.getOrDefault("filters", Map.of());
-        return ResponseEntity.ok(ragService.search(query, filters, topK));
+    public Mono<ResponseEntity<List<RagSearchResult>>> search(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> {
+                    String query = (String) payload.getOrDefault("query", "");
+                    int topK = ((Number) payload.getOrDefault("topK", 5)).intValue();
+                    Map<String, Object> filters = (Map<String, Object>) payload.getOrDefault("filters", Map.of());
+                    return ragService.search(query, filters, topK);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping("/api-changes")
-    public ResponseEntity<ApiChangeResponse> findApiChanges(@RequestBody Map<String, Object> payload) {
-        String symbol = (String) payload.get("symbol");
-        String fromVersion = (String) payload.get("fromVersion");
-        String toVersion = (String) payload.get("toVersion");
-        int topK = ((Number) payload.getOrDefault("topK", 5)).intValue();
-        return ResponseEntity.ok(springApiChangeService.findApiChanges(symbol, fromVersion, toVersion, topK));
+    public Mono<ResponseEntity<ApiChangeResponse>> findApiChanges(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> {
+                    String symbol = (String) payload.get("symbol");
+                    String fromVersion = (String) payload.get("fromVersion");
+                    String toVersion = (String) payload.get("toVersion");
+                    int topK = ((Number) payload.getOrDefault("topK", 5)).intValue();
+                    return springApiChangeService.findApiChanges(symbol, fromVersion, toVersion, topK);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
     }
 }
