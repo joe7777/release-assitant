@@ -22,6 +22,8 @@ spring:
   application:
     name: mcp-server
   ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
     mcp:
       server:
         enabled: true
@@ -35,7 +37,7 @@ spring:
             - com.example.mcpserver.tools
     vectorstore:
       qdrant:
-        host: ${QDRANT_HOST:localhost}
+        host: ${QDRANT_HOST:vector-db}
         port: ${QDRANT_PORT:6333}
         collection-name: mcp_documents
         api-key: ${QDRANT_API_KEY:}
