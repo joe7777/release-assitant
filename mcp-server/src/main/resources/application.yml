@@ -4,6 +4,8 @@ server:
 logging:
   level:
     com.example.mcpserver: INFO
+    org.springframework.ai.mcp: DEBUG
+    org.springframework.ai: DEBUG
 
 management:
   endpoints:
@@ -27,6 +29,7 @@ spring:
           base-packages:
             - com.example.mcpserver.tools
         transport:
+          type: streamable-http
           streamable-http:
             enabled: true
             path: /mcp
