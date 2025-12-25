@@ -6,12 +6,13 @@ logging:
     com.example.mcpserver: INFO
     org.springframework.ai.mcp: DEBUG
     org.springframework.ai: DEBUG
+    reactor.netty.http.server: DEBUG
 
 management:
   endpoints:
     web:
       exposure:
-        include: "health,info,metrics"
+        include: "health,info,metrics,mappings"
   endpoint:
     health:
       probes:
@@ -24,15 +25,14 @@ spring:
     mcp:
       server:
         enabled: true
+        protocol: STREAMABLE
+        # (optionnel si tu veux forcer l’endpoint, sinon /mcp par défaut selon la doc)
+        streamable-http:
+          mcp-endpoint: /mcp
         annotation-scanner:
           enabled: true
           base-packages:
             - com.example.mcpserver.tools
-        transport:
-          type: streamable-http
-          streamable-http:
-            enabled: true
-            path: /mcp
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:localhost}

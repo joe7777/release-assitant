@@ -106,7 +106,10 @@ services:
   mcp-inspector:
     image: ghcr.io/modelcontextprotocol/inspector:latest
     environment:
+      HOST: 0.0.0.0
       MCP_SERVER_URL: http://mcp-server:8085/mcp
+      MCP_PROXY_AUTH_TOKEN: devtoken
+      ALLOWED_ORIGINS: http://localhost:6274,http://127.0.0.1:6274
     depends_on:
       - mcp-server
     ports:
