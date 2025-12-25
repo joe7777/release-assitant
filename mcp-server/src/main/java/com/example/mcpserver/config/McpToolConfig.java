@@ -1,6 +1,6 @@
 package com.example.mcpserver.config;
 
-import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,9 +12,9 @@ import com.example.mcpserver.tools.RagTools;
 public class McpToolConfig {
 
     @Bean
-    public ToolCallbackProvider toolCallbackProvider(RagTools ragTools, ProjectTools projectTools,
+    public MethodToolCallbackProvider toolCallbackProvider(RagTools ragTools, ProjectTools projectTools,
             MethodologyTools methodologyTools) {
-        return ToolCallbackProvider.builder()
+        return MethodToolCallbackProvider.builder()
                 .toolObjects(ragTools, projectTools, methodologyTools)
                 .build();
     }
