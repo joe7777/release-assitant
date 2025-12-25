@@ -16,7 +16,9 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 
 import com.example.mcpserver.dto.BaselineProposal;
 import com.example.mcpserver.dto.RagIngestionResponse;
@@ -42,13 +44,21 @@ public class RagService {
         this.ingestionLedger = ingestionLedger;
         this.maxContentLength = maxContentLength;
         this.allowlist = Set.copyOf(allowlist);
-        this.webClient = WebClient.builder().build();
+        ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxContentLength))
+                .build();
+        this.webClient = WebClient.builder().exchangeStrategies(exchangeStrategies).build();
     }
 
     public RagIngestionResponse ingestFromHtml(String url, String sourceType, String library, String version,
             String docId, List<String> selectors) throws IOException {
         validateUrl(url);
-        String html = fetch(url);
+        String html;
+        try {
+            html = fetch(url);
+        } catch (ContentTooLargeException ex) {
+            return new RagIngestionResponse("", 0, 0, List.of("content-too-large"));
+        }
         String text = htmlTextExtractor.extract(html);
         return ingestText(sourceType, library, version, text, url, docId);
     }
@@ -98,12 +108,17 @@ public class RagService {
     }
 
     private String fetch(String url) throws IOException {
-        byte[] body = webClient.get().uri(URI.create(url)).retrieve().bodyToMono(byte[].class).block();
+        byte[] body;
+        try {
+            body = webClient.get().uri(URI.create(url)).retrieve().bodyToMono(byte[].class).block();
+        } catch (DataBufferLimitException ex) {
+            throw new ContentTooLargeException("Content exceeds max buffer size", ex);
+        }
         if (body == null) {
             throw new IOException("Empty response from url " + url);
         }
         if (body.length > maxContentLength) {
-            throw new IOException("Content too large");
+            throw new ContentTooLargeException("Content too large");
         }
         return new String(body, StandardCharsets.UTF_8);
     }
@@ -148,5 +163,15 @@ public class RagService {
             }
         }
         return true;
+    }
+
+    private static class ContentTooLargeException extends IOException {
+        ContentTooLargeException(String message) {
+            super(message);
+        }
+
+        ContentTooLargeException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }
