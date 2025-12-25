@@ -1,6 +1,6 @@
 package com.example.mcpserver.config;
 
-import org.springframework.ai.tool.MethodToolCallbackProvider;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
