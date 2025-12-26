@@ -95,6 +95,7 @@ services:
       MCP_WORKSPACE_ROOT: /workspaces
       MCP_SPRING_CACHE_ROOT: /spring-cache
       RAG_MAX_CONTENT_LENGTH: 1048576
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009"
     volumes:
       - workspace-data:/workspaces
       - spring-cache-data:/spring-cache
@@ -102,6 +103,7 @@ services:
       - vector-db
     ports:
       - "8085:8085"
+      - "5009:5009"
 
   mcp-inspector:
     image: ghcr.io/modelcontextprotocol/inspector:latest
