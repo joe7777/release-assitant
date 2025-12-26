@@ -90,6 +90,7 @@ services:
   mcp-server:
     build: ./mcp-server
     environment:
+      SPRING_PROFILES_ACTIVE: qdrant
       QDRANT_HOST: vector-db
       QDRANT_PORT: 6333
       MCP_WORKSPACE_ROOT: /workspaces

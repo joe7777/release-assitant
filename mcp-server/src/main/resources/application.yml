@@ -21,6 +21,8 @@ management:
 spring:
   application:
     name: mcp-server
+  profiles:
+    default: qdrant
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
@@ -37,12 +39,6 @@ spring:
           enabled: true
           base-packages:
             - com.example.mcpserver.tools
-    vectorstore:
-      qdrant:
-        host: ${QDRANT_HOST:vector-db}
-        port: ${QDRANT_PORT:6333}
-        collection-name: mcp_documents
-        api-key: ${QDRANT_API_KEY:}
     embeddings:
       metadata-mode: storage
 
@@ -62,3 +58,17 @@ mcp:
     collection: ${RAG_COLLECTION:mcp_documents}
     baseline-do-ingest: ${RAG_BASELINE_DO_INGEST:false}
     text-normalization: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: qdrant
+  ai:
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_HOST:vector-db}
+        port: ${QDRANT_PORT:6333}
+        collection-name: mcp_documents
+        api-key: ${QDRANT_API_KEY:}
+        initialize-schema: true
