@@ -68,7 +68,7 @@ spring:
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:vector-db}
-        port: ${QDRANT_PORT:6333}
+        port: ${QDRANT_PORT:6334}
         collection-name: mcp_documents
         api-key: ${QDRANT_API_KEY:}
         initialize-schema: true
