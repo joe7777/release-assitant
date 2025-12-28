@@ -1,6 +1,7 @@
 package com.example.llmhost.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import com.example.llmhost.config.McpToolsConfig;
 import org.springframework.ai.tool.ToolCallback;
@@ -19,7 +20,11 @@ public class McpToolsController {
     }
 
     @GetMapping
-    public List<String> listTools() {
-        return McpToolsConfig.toolNames(toolCallbacks);
+    public Map<String, Object> listTools() {
+        List<String> names = McpToolsConfig.toolNames(toolCallbacks);
+        return Map.of(
+                "count", names.size(),
+                "names", names
+        );
     }
 }

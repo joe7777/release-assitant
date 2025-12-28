@@ -6,8 +6,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.mcp.client.sync.McpSyncClient;
-import org.springframework.ai.mcp.client.tool.SyncMcpToolCallbackProvider;
+import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.boot.actuate.info.InfoContributor;
@@ -23,7 +22,7 @@ public class McpToolsConfig {
 
     @Bean
     @Primary
-    public List<ToolCallback> mcpToolCallbacks(List<McpSyncClient> clients) {
+    public List<ToolCallback> mcpToolCallbacks(List<io.modelcontextprotocol.client.McpSyncClient> clients) {
         if (clients == null || clients.isEmpty()) {
             LOGGER.warn("No MCP clients configured, MCP tool callbacks will be empty.");
             return Collections.emptyList();
