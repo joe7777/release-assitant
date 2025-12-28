@@ -42,7 +42,7 @@ public class ToolCallingChatService {
         this.chatClient = chatClient;
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
-        this.functionCallbacks = new ArrayList<>(functionCallbacks);
+        this.functionCallbacks = functionCallbacks;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
     }
 

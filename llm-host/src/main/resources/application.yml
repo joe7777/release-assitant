@@ -18,7 +18,9 @@ spring:
       client:
         transport:
           streamable-http:
-            url: ${MCP_SERVER_URL:http://localhost:8085/mcp}
+            url: ${MCP_SERVER_URL:http://mcp-server:8085/mcp}
+            connect-timeout: ${MCP_CLIENT_CONNECT_TIMEOUT:5s}
+            read-timeout: ${MCP_CLIENT_READ_TIMEOUT:60s}
 
 app:
   ai:
