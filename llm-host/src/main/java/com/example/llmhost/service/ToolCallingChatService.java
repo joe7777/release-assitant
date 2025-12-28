@@ -57,7 +57,7 @@ public class ToolCallingChatService {
                 .system(systemPromptProvider.buildSystemPrompt())
                 .user(request.prompt())
                 .advisors(loggingAdvisor)
-                .tools(callbacks)
+                .toolCallbacks(callbacks)
                 .call();
 
         String content = response.content();
