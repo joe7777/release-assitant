@@ -2,33 +2,24 @@ package com.example.llmhost.controller;
 
 import java.util.List;
 
-import com.example.llmhost.service.McpToolRegistry;
-import org.springframework.http.HttpStatus;
+import com.example.llmhost.config.McpToolsConfig;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/tools")
 public class McpToolsController {
 
-    private final McpToolRegistry registry;
+    private final List<ToolCallback> toolCallbacks;
 
-    public McpToolsController(McpToolRegistry registry) {
-        this.registry = registry;
+    public McpToolsController(List<ToolCallback> toolCallbacks) {
+        this.toolCallbacks = toolCallbacks;
     }
 
     @GetMapping
     public List<String> listTools() {
-        return registry.getToolNames();
-    }
-
-    @PostMapping("/reload")
-    @ResponseStatus(HttpStatus.OK)
-    public List<String> reloadTools() {
-        registry.reloadTools();
-        return registry.getToolNames();
+        return McpToolsConfig.toolNames(toolCallbacks);
     }
 }

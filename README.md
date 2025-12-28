@@ -78,6 +78,7 @@ sequenceDiagram
 - Java 21 et Maven 3.9+
 - Node.js 18+ et npm
 - Variable d'environnement `OPENAI_API_KEY` uniquement si vous activez le provider OpenAI (profil `prod`).
+- Variable d'environnement `MCP_SERVER_URL` pour pointer vers le MCP Streamable HTTP (défaut: `http://mcp-server:8085/mcp`).
 
 ## Fournisseurs LLM/Embeddings (Spring AI)
 - Abstraction unique via `ChatGateway` et `EmbeddingGateway`, implémentée avec Spring AI.
@@ -88,6 +89,7 @@ sequenceDiagram
 - Endpoint REST : `POST /chat` (ou `/runs`) avec `{ "prompt": "...", "dryRun": false }`.
 - Tool-calling MCP : project.*, rag.*, methodology.* exposés par `mcp-server`.
 - Traces : chaque réponse expose la liste des tool-calls (nom, durée, arguments). DRY_RUN force la planification sans exécution des tools.
+- Variable `MCP_SERVER_URL` : URL du MCP Streamable HTTP, par exemple `http://localhost:8085/mcp` en local.
 
 ### Local LLM (Ollama)
 1. Démarrer via Docker Compose (inclut `ollama` et le service `llm-host`)
@@ -194,6 +196,19 @@ Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessou
    - MCP Server : http://localhost:8085 (transport Streamable HTTP `/mcp`)
   - MCP Inspector : http://localhost:6274 (UI d'exploration des tools MCP)
    - PostgreSQL : localhost:5432 (db `upgrader`, utilisateur/mot de passe `upgrader`)
+
+Exemple de configuration Docker Compose pour garantir la résolution réseau `mcp-server` côté `llm-host` :
+```yaml
+services:
+  llm-host:
+    environment:
+      MCP_SERVER_URL: http://mcp-server:8085/mcp
+    depends_on:
+      - mcp-server
+  mcp-server:
+    ports:
+      - "8085:8085"
+```
 
 ## Stockage persistant & nettoyage
 - **Volumes Docker** :
