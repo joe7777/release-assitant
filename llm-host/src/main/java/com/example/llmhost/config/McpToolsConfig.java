@@ -8,12 +8,14 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.boot.actuate.info.InfoContributor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 @Configuration
 public class McpToolsConfig {
 
     @Bean
-    public List<ToolCallback> mcpToolCallbacks(McpToolRegistry registry) {
+    @Primary
+    public List<ToolCallback> registryToolCallbacks(McpToolRegistry registry) {
         return registry.getToolCallbacks();
     }
 
