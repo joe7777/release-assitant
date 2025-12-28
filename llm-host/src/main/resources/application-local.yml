@@ -5,3 +5,14 @@ spring:
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    mcp:
+      client:
+        enabled: true
+        type: SYNC
+        toolcallback:
+          enabled: true
+        streamable-http:
+          connections:
+            mcpServer:
+              url: ${MCP_SERVER_URL:http://mcp-server:8085/mcp}
+        request-timeout: 30s

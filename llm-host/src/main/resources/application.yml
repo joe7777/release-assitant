@@ -16,11 +16,15 @@ spring:
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
     mcp:
       client:
-        transport:
-          streamable-http:
-            url: ${MCP_SERVER_URL:http://mcp-server:8085/mcp}
-            connect-timeout: ${MCP_CLIENT_CONNECT_TIMEOUT:5s}
-            read-timeout: ${MCP_CLIENT_READ_TIMEOUT:60s}
+        enabled: true
+        type: SYNC
+        toolcallback:
+          enabled: true
+        streamable-http:
+          connections:
+            mcpServer:
+              url: ${MCP_SERVER_URL:http://mcp-server:8085/mcp}
+        request-timeout: 30s
 
 app:
   ai:
