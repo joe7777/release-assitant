@@ -13,3 +13,9 @@ SPRING_RELEASE_NOTE;spring-framework;5.3.14;https://github.com/spring-projects/s
 SPRING_RELEASE_NOTE;spring-framework;5.3.15;https://github.com/spring-projects/spring-framework/releases/tag/v5.3.15;spring-framework-5-3-15;;
 SPRING_RELEASE_NOTE;spring-framework;5.3.16;https://github.com/spring-projects/spring-framework/releases/tag/v5.3.16;spring-framework-5-3-16;;
 SPRING_RELEASE_NOTE;spring-framework;5.3.17;https://github.com/spring-projects/spring-framework/releases/tag/v5.3.17;spring-framework-5-3-17;;
+SPRING_RELEASE_NOTE;spring-boot;upgrading;https://docs.spring.io/spring-boot/upgrading.html;spring-boot-upgrading;main;nav,footer,.sidebar,.toc
+SPRING_RELEASE_NOTE;spring-boot;2.6.x;https://docs.spring.io/spring-boot/docs/2.6.x/reference/htmlsingle/;spring-boot-2-6-x-reference;main;nav,footer,.sidebar,.toc
+SPRING_RELEASE_NOTE;spring-boot;2.6.x;https://docs.spring.io/spring-boot/docs/2.6.x/reference/html/release-notes.html;spring-boot-2-6-x-release-notes;main;nav,footer,.sidebar,.toc
+SPRING_RELEASE_NOTE;spring-boot;2.7.x;https://docs.spring.io/spring-boot/docs/2.7.x/reference/htmlsingle/;spring-boot-2-7-x-reference;main;nav,footer,.sidebar,.toc
+SPRING_RELEASE_NOTE;spring-boot;2.7.x;https://docs.spring.io/spring-boot/docs/2.7.x/reference/html/release-notes.html;spring-boot-2-7-x-release-notes;main;nav,footer,.sidebar,.toc
+SPRING_RELEASE_NOTE;spring-boot;2.7.x-deps;https://docs.spring.io/spring-boot/docs/2.7.x/reference/html/dependency-versions.html;spring-boot-2-7-x-dependency-versions;main;nav,footer,.sidebar,.toc
