@@ -61,7 +61,7 @@ public class RepoSourceIngestionService {
     public RepoSourceIngestionService(VectorStore vectorStore, HashingService hashingService,
             IngestionLedger ingestionLedger,
             @Value("${mcp.spring-source.cache-root:spring-sources}") String cacheRoot,
-            @Value("${mcp.spring-source.default-max-files:2000}") int defaultMaxFiles,
+            @Value("${mcp.spring-source.default-max-files:6000}") int defaultMaxFiles,
             @Value("${mcp.spring-source.default-max-file-bytes:300000}") int defaultMaxFileBytes,
             @Value("${mcp.spring-source.default-max-lines-per-file:8000}") int defaultMaxLinesPerFile,
             @Value("${mcp.rag.chunk-size:800}") int chunkSize,
@@ -110,7 +110,8 @@ public class RepoSourceIngestionService {
         List<PathMatcher> excludeMatchers = toMatchers(excludeGlobs);
         List<PathMatcher> testMatchers = includeTestsResolved ? List.of() : toMatchers(DEFAULT_TEST_EXCLUDE_GLOBS);
 
-        Set<String> moduleSet = normalizeModules(request.modules(), config.defaultModules());
+        List<String> modulePatterns = normalizeModulePatterns(request.modules(), config.defaultModules());
+        List<PathMatcher> moduleMatchers = toMatchers(modulePatterns);
         Path repoPath = ensureRepo(config.repoUrl(), config.repoSlug());
         String commit;
         try (Git git = Git.open(repoPath.toFile())) {
@@ -119,7 +120,7 @@ public class RepoSourceIngestionService {
             commit = git.getRepository().resolve("HEAD").name();
         }
 
-        IngestionStats stats = ingestFromRepo(repoPath, request.version(), commit, moduleSet,
+        IngestionStats stats = ingestFromRepo(repoPath, request.version(), commit, modulePatterns, moduleMatchers,
                 includeMatchers, excludeMatchers, testMatchers, includeNonJavaResolved, includeKotlinResolved,
                 maxFilesResolved, maxFileBytesResolved, maxLinesResolved, chunkSizeResolved, chunkOverlapResolved,
                 forceIngest, config);
@@ -131,10 +132,10 @@ public class RepoSourceIngestionService {
     }
 
     private IngestionStats ingestFromRepo(Path repoPath, String version, String commit,
-            Set<String> moduleSet, List<PathMatcher> includeMatchers, List<PathMatcher> excludeMatchers,
-            List<PathMatcher> testMatchers, boolean includeNonJava, boolean includeKotlin, int maxFiles,
-            int maxFileBytes, int maxLinesPerFile, int chunkSize, int chunkOverlap, boolean forceIngest,
-            RepoSourceConfig config)
+            List<String> modulePatterns, List<PathMatcher> moduleMatchers, List<PathMatcher> includeMatchers,
+            List<PathMatcher> excludeMatchers, List<PathMatcher> testMatchers, boolean includeNonJava,
+            boolean includeKotlin, int maxFiles, int maxFileBytes, int maxLinesPerFile, int chunkSize,
+            int chunkOverlap, boolean forceIngest, RepoSourceConfig config)
             throws IOException {
         Map<String, Integer> skipReasons = new HashMap<>();
         int filesScanned = 0;
@@ -153,8 +154,8 @@ public class RepoSourceIngestionService {
                 filesScanned++;
 
                 String relativePath = repoPath.relativize(file).toString().replace("\\", "/");
-                String module = extractModule(relativePath);
-                if (!moduleSet.isEmpty() && !moduleSet.contains(module)) {
+                String module = resolveModule(relativePath, modulePatterns);
+                if (!moduleMatchers.isEmpty() && !matchesAny(relativePath, moduleMatchers)) {
                     filesSkipped++;
                     increment(skipReasons, "MODULE_MISMATCH");
                     continue;
@@ -330,13 +331,23 @@ public class RepoSourceIngestionService {
         return false;
     }
 
-    private Set<String> normalizeModules(List<String> modules, List<String> defaultModules) {
-        if (modules == null || modules.isEmpty()) {
-            return defaultModules == null ? Set.of() : new HashSet<>(defaultModules);
+    private List<String> normalizeModulePatterns(List<String> modules, List<String> defaultModules) {
+        List<String> source = modules == null || modules.isEmpty() ? defaultModules : modules;
+        if (source == null || source.isEmpty()) {
+            return List.of();
         }
-        return modules.stream()
-                .filter(module -> module != null && !module.isBlank())
-                .collect(Collectors.toCollection(HashSet::new));
+        List<String> normalized = new ArrayList<>();
+        for (String module : source) {
+            if (module == null || module.isBlank()) {
+                continue;
+            }
+            String trimmed = module.trim();
+            if (!containsGlob(trimmed) && !trimmed.endsWith("/**")) {
+                trimmed = trimmed + "/**";
+            }
+            normalized.add(trimmed);
+        }
+        return normalized;
     }
 
     private List<String> sanitizeModulesList(List<String> modules, List<String> defaultModules) {
@@ -430,6 +441,29 @@ public class RepoSourceIngestionService {
     private String extractModule(String relativePath) {
         int idx = relativePath.indexOf('/');
         return idx > 0 ? relativePath.substring(0, idx) : relativePath;
+    }
+
+    private boolean containsGlob(String value) {
+        return value.contains("*") || value.contains("?") || value.contains("[");
+    }
+
+    private String resolveModule(String relativePath, List<String> modulePatterns) {
+        if (modulePatterns == null || modulePatterns.isEmpty()) {
+            return extractModule(relativePath);
+        }
+        for (String pattern : modulePatterns) {
+            if (pattern == null || pattern.isBlank()) {
+                continue;
+            }
+            PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+            if (matcher.matches(Path.of(relativePath))) {
+                String normalized = pattern.endsWith("/**")
+                        ? pattern.substring(0, pattern.length() - 3)
+                        : pattern;
+                return normalized;
+            }
+        }
+        return extractModule(relativePath);
     }
 
     private String buildDocumentKey(RepoSourceConfig config, String version, String module, String relativePath) {
