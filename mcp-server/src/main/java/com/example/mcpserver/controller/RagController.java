@@ -18,6 +18,7 @@ import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
+import com.example.mcpserver.service.SpringBootSourceIngestionService;
 import com.example.mcpserver.service.SpringSourceIngestionService;
 
 @RestController
@@ -27,12 +28,15 @@ public class RagController {
     private final RagService ragService;
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
+    private final SpringBootSourceIngestionService springBootSourceIngestionService;
 
     public RagController(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
-            SpringApiChangeService springApiChangeService) {
+            SpringApiChangeService springApiChangeService,
+            SpringBootSourceIngestionService springBootSourceIngestionService) {
         this.ragService = ragService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
+        this.springBootSourceIngestionService = springBootSourceIngestionService;
     }
 
     @PostMapping("/ingest/html")
@@ -58,6 +62,14 @@ public class RagController {
     public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringSource(
             @RequestBody SpringSourceIngestionRequest request) {
         return Mono.fromCallable(() -> springSourceIngestionService.ingestSpringSource(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
+    }
+
+    @PostMapping("/ingest/spring-boot-source")
+    public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringBootSource(
+            @RequestBody SpringSourceIngestionRequest request) {
+        return Mono.fromCallable(() -> springBootSourceIngestionService.ingestSpringBootSource(request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
     }
