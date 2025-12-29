@@ -36,7 +36,7 @@ public class RagService {
     private final int maxContentLength;
 
     public RagService(VectorStore vectorStore, HashingService hashingService, HtmlTextExtractor htmlTextExtractor,
-            IngestionLedger ingestionLedger, @Value("${mcp.rag.max-content-length:1048576}") int maxContentLength,
+            IngestionLedger ingestionLedger, @Value("${mcp.rag.max-content-length:5242880}") int maxContentLength,
             @Value("${mcp.rag.allowlist:https://docs.spring.io,https://github.com}") List<String> allowlist) {
         this.vectorStore = vectorStore;
         this.hashingService = hashingService;

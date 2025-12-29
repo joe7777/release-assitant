@@ -32,7 +32,7 @@ public class CodeIndexer {
     private final Set<String> allowedExtensions;
 
     public CodeIndexer(VectorStore vectorStore, HashingService hashingService,
-            @Value("${mcp.rag.max-content-length:1048576}") int maxFileSizeBytes) {
+            @Value("${mcp.rag.max-content-length:5242880}") int maxFileSizeBytes) {
         this.vectorStore = vectorStore;
         this.hashingService = hashingService;
         this.maxFileSizeBytes = maxFileSizeBytes;
