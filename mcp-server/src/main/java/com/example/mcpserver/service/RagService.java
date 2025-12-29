@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.core.io.buffer.DataBufferLimitException;
 
 import com.example.mcpserver.dto.BaselineProposal;
@@ -111,6 +112,12 @@ public class RagService {
         byte[] body;
         try {
             body = webClient.get().uri(URI.create(url)).retrieve().bodyToMono(byte[].class).block();
+        } catch (WebClientResponseException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof DataBufferLimitException) {
+                throw new ContentTooLargeException("Content exceeds max buffer size", ex);
+            }
+            throw ex;
         } catch (DataBufferLimitException ex) {
             throw new ContentTooLargeException("Content exceeds max buffer size", ex);
         }
