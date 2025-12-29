@@ -20,7 +20,7 @@ public class McpToolsConfig {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(McpToolsConfig.class);
 
-    @Bean
+    @Bean(name = "customMcpToolCallbacks")
     @Primary
     public List<ToolCallback> mcpToolCallbacks(List<io.modelcontextprotocol.client.McpSyncClient> clients) {
         if (clients == null || clients.isEmpty()) {
