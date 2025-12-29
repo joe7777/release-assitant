@@ -24,7 +24,7 @@ spring:
         streamable-http:
           connections:
             mcpServer:
-              url: ${MCP_SERVER_URL:http://mcp-server:8085/mcp}
+              url: ${MCP_SERVER_URL:http://mcp-server:8085}
         request-timeout: 30s
 
 app:
