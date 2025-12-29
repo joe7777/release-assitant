@@ -12,6 +12,7 @@ import com.example.mcpserver.dto.BaselineProposal;
 import com.example.mcpserver.dto.ApiChangeResponse;
 import com.example.mcpserver.dto.RagIngestionResponse;
 import com.example.mcpserver.dto.RagSearchResult;
+import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
@@ -54,11 +55,9 @@ public class RagTools {
     }
 
     @Tool(name = "rag.ingestSpringSource", description = "Ingère le code source de Spring Framework")
-    public SpringSourceIngestionResponse ingestSpringSource(String version, List<String> modules, String tagOrBranch,
-            Boolean includeJavadoc, Integer maxFiles, Boolean force, Boolean includeTests)
+    public SpringSourceIngestionResponse ingestSpringSource(SpringSourceIngestionRequest request)
             throws IOException, GitAPIException {
-        return springSourceIngestionService.ingestSpringSource(version, modules, tagOrBranch, includeJavadoc, maxFiles,
-                force, includeTests);
+        return springSourceIngestionService.ingestSpringSource(request);
     }
 
     @Tool(name = "rag.findApiChanges", description = "Compare des changements API via RAG entre deux versions")

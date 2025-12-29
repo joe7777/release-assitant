@@ -14,6 +14,7 @@ import reactor.core.scheduler.Schedulers;
 import com.example.mcpserver.dto.ApiChangeResponse;
 import com.example.mcpserver.dto.RagIngestionResponse;
 import com.example.mcpserver.dto.RagSearchResult;
+import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
@@ -54,12 +55,9 @@ public class RagController {
     }
 
     @PostMapping("/ingest/spring-source")
-    public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringSource(@RequestBody Map<String, Object> payload) {
-        return Mono.fromCallable(() -> springSourceIngestionService.ingestSpringSource(
-                        (String) payload.get("version"), (List<String>) payload.get("modules"),
-                        (String) payload.get("tagOrBranch"), (Boolean) payload.get("includeJavadoc"),
-                        (Integer) payload.get("maxFiles"), (Boolean) payload.get("force"),
-                        (Boolean) payload.get("includeTests")))
+    public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringSource(
+            @RequestBody SpringSourceIngestionRequest request) {
+        return Mono.fromCallable(() -> springSourceIngestionService.ingestSpringSource(request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
     }
