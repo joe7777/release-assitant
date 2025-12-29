@@ -16,10 +16,12 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferLimitException;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import org.springframework.core.io.buffer.DataBufferLimitException;
 
 import com.example.mcpserver.dto.BaselineProposal;
 import com.example.mcpserver.dto.RagIngestionResponse;
@@ -54,14 +56,23 @@ public class RagService {
     public RagIngestionResponse ingestFromHtml(String url, String sourceType, String library, String version,
             String docId, List<String> selectors) throws IOException {
         validateUrl(url);
-        String html;
+        FetchResult fetchResult;
         try {
-            html = fetch(url);
+            fetchResult = fetch(url);
         } catch (ContentTooLargeException ex) {
             return new RagIngestionResponse("", 0, 0, List.of("content-too-large"));
         }
-        String text = htmlTextExtractor.extract(html);
-        return ingestText(sourceType, library, version, text, url, docId);
+        SelectorConfig selectorConfig = SelectorConfig.from(selectors);
+        String text = htmlTextExtractor.extract(fetchResult.html(), selectorConfig.contentCss(),
+                selectorConfig.removeCss());
+        RagIngestionResponse response = ingestText(sourceType, library, version, text, url, docId);
+        if (fetchResult.truncated()) {
+            List<String> warnings = new ArrayList<>(response.warnings());
+            warnings.add("content-truncated");
+            return new RagIngestionResponse(response.documentHash(), response.chunksStored(), response.chunksSkipped(),
+                    warnings);
+        }
+        return response;
     }
 
     public RagIngestionResponse ingestText(String sourceType, String library, String version, String content, String url,
@@ -108,10 +119,31 @@ public class RagService {
         }
     }
 
-    private String fetch(String url) throws IOException {
-        byte[] body;
+    private FetchResult fetch(String url) throws IOException {
+        StringBuilder bodyBuilder = new StringBuilder();
+        int[] bytesRead = new int[] { 0 };
+        boolean[] truncated = new boolean[] { false };
         try {
-            body = webClient.get().uri(URI.create(url)).retrieve().bodyToMono(byte[].class).block();
+            Iterable<DataBuffer> buffers = webClient.get().uri(URI.create(url)).retrieve()
+                    .bodyToFlux(DataBuffer.class).toIterable();
+            for (DataBuffer buffer : buffers) {
+                int remaining = maxContentLength - bytesRead[0];
+                if (remaining <= 0) {
+                    truncated[0] = true;
+                    DataBufferUtils.release(buffer);
+                    continue;
+                }
+                int readable = buffer.readableByteCount();
+                int toRead = Math.min(remaining, readable);
+                byte[] chunk = new byte[toRead];
+                buffer.read(chunk, 0, toRead);
+                DataBufferUtils.release(buffer);
+                bytesRead[0] += toRead;
+                bodyBuilder.append(new String(chunk, StandardCharsets.UTF_8));
+                if (toRead < readable) {
+                    truncated[0] = true;
+                }
+            }
         } catch (WebClientResponseException ex) {
             Throwable cause = ex.getCause();
             if (cause instanceof DataBufferLimitException) {
@@ -121,13 +153,24 @@ public class RagService {
         } catch (DataBufferLimitException ex) {
             throw new ContentTooLargeException("Content exceeds max buffer size", ex);
         }
-        if (body == null) {
+        if (bytesRead[0] == 0) {
             throw new IOException("Empty response from url " + url);
         }
-        if (body.length > maxContentLength) {
-            throw new ContentTooLargeException("Content too large");
+        return new FetchResult(bodyBuilder.toString(), truncated[0]);
+    }
+
+    private record FetchResult(String html, boolean truncated) {
+    }
+
+    private record SelectorConfig(String contentCss, List<String> removeCss) {
+        static SelectorConfig from(List<String> selectors) {
+            if (selectors == null || selectors.isEmpty()) {
+                return new SelectorConfig("", List.of());
+            }
+            String contentCss = selectors.get(0);
+            List<String> removeCss = selectors.size() > 1 ? selectors.subList(1, selectors.size()) : List.of();
+            return new SelectorConfig(contentCss, removeCss);
         }
-        return new String(body, StandardCharsets.UTF_8);
     }
 
     private List<Document> splitToDocuments(String content, String docHash, String documentKey, String sourceType,
