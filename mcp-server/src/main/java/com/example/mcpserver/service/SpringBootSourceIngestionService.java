@@ -10,37 +10,38 @@ import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 
 @Service
-public class SpringSourceIngestionService {
+public class SpringBootSourceIngestionService {
 
-    private static final RepoSourceConfig SPRING_FRAMEWORK_CONFIG = new RepoSourceConfig(
-            "https://github.com/spring-projects/spring-framework",
-            "spring-framework",
-            "spring-framework",
-            "SPRING_SOURCE",
+    private static final RepoSourceConfig SPRING_BOOT_CONFIG = new RepoSourceConfig(
+            "https://github.com/spring-projects/spring-boot",
+            "spring-boot",
+            "spring-boot",
+            "SPRING_BOOT_SOURCE",
             "v",
             "SPRING_SOURCE",
-            List.of(),
+            List.of(
+                    "spring-boot-project/spring-boot",
+                    "spring-boot-project/spring-boot-autoconfigure",
+                    "spring-boot-project/spring-boot-starters"),
             List.of("**/*.java"),
             List.of(
                     "**/src/test/**",
-                    "**/src/it/**",
-                    "**/src/integrationTest/**",
                     "**/*Test.java",
-                    "**/*Tests.java",
-                    "**/target/**",
                     "**/build/**",
+                    "**/target/**",
                     "**/.git/**",
+                    "**/spring-boot-samples/**",
                     "**/package-info.java",
                     "**/module-info.java"));
 
     private final RepoSourceIngestionService repoSourceIngestionService;
 
-    public SpringSourceIngestionService(RepoSourceIngestionService repoSourceIngestionService) {
+    public SpringBootSourceIngestionService(RepoSourceIngestionService repoSourceIngestionService) {
         this.repoSourceIngestionService = repoSourceIngestionService;
     }
 
-    public SpringSourceIngestionResponse ingestSpringSource(SpringSourceIngestionRequest request)
+    public SpringSourceIngestionResponse ingestSpringBootSource(SpringSourceIngestionRequest request)
             throws IOException, GitAPIException {
-        return repoSourceIngestionService.ingest(request, SPRING_FRAMEWORK_CONFIG);
+        return repoSourceIngestionService.ingest(request, SPRING_BOOT_CONFIG);
     }
 }

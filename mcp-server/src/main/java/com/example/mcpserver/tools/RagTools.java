@@ -16,6 +16,7 @@ import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
+import com.example.mcpserver.service.SpringBootSourceIngestionService;
 import com.example.mcpserver.service.SpringSourceIngestionService;
 
 @Component
@@ -24,12 +25,15 @@ public class RagTools {
     private final RagService ragService;
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
+    private final SpringBootSourceIngestionService springBootSourceIngestionService;
 
     public RagTools(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
-            SpringApiChangeService springApiChangeService) {
+            SpringApiChangeService springApiChangeService,
+            SpringBootSourceIngestionService springBootSourceIngestionService) {
         this.ragService = ragService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
+        this.springBootSourceIngestionService = springBootSourceIngestionService;
     }
 
     @Tool(name = "rag.ingestFromHtml", description = "Ingère une page HTML dans le RAG")
@@ -58,6 +62,12 @@ public class RagTools {
     public SpringSourceIngestionResponse ingestSpringSource(SpringSourceIngestionRequest request)
             throws IOException, GitAPIException {
         return springSourceIngestionService.ingestSpringSource(request);
+    }
+
+    @Tool(name = "rag.ingestSpringBootSource", description = "Ingère le code source de Spring Boot")
+    public SpringSourceIngestionResponse ingestSpringBootSource(SpringSourceIngestionRequest request)
+            throws IOException, GitAPIException {
+        return springBootSourceIngestionService.ingestSpringBootSource(request);
     }
 
     @Tool(name = "rag.findApiChanges", description = "Compare des changements API via RAG entre deux versions")
