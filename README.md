@@ -147,7 +147,7 @@ Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessou
 - **Ingestion Spring source** : repo fixée à `https://github.com/spring-projects/spring-framework`.
 - **Max content length** : `mcp.rag.max-content-length` (défaut: 1 048 576 bytes).
 - **Chunking** : `mcp.rag.chunk-size` (défaut: 800), `mcp.rag.chunk-overlap` (défaut: 80).
-- **Limite fichiers Spring** : `mcp.spring-source.default-max-files` (défaut: 2000), override par `maxFiles`.
+- **Limite fichiers Spring** : `mcp.spring-source.default-max-files` (défaut: 6000), override par `maxFiles`.
 
 ## Exemples de prompts (Spring-only)
 - "Clone le dépôt https://github.com/acme/mon-app, détecte les dépendances Spring, puis propose les workpoints."

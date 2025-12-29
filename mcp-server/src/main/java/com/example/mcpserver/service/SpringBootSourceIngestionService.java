@@ -17,12 +17,11 @@ public class SpringBootSourceIngestionService {
             "spring-boot",
             "spring-boot",
             "SPRING_BOOT_SOURCE",
-            "v",
+            "",
             "SPRING_SOURCE",
             List.of(
-                    "spring-boot-project/spring-boot",
-                    "spring-boot-project/spring-boot-autoconfigure",
-                    "spring-boot-project/spring-boot-starters"),
+                    "spring-boot-project/spring-boot-autoconfigure/**",
+                    "spring-boot-project/spring-boot-starters/**"),
             List.of("**/*.java"),
             List.of(
                     "**/src/test/**",
