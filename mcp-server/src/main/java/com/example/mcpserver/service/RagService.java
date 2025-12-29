@@ -9,8 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -30,6 +33,8 @@ import com.example.mcpserver.dto.RagSearchResult;
 @Service
 public class RagService {
 
+    private static final Logger logger = LoggerFactory.getLogger(RagService.class);
+
     private final VectorStore vectorStore;
     private final HashingService hashingService;
     private final HtmlTextExtractor htmlTextExtractor;
@@ -37,15 +42,30 @@ public class RagService {
     private final WebClient webClient;
     private final Set<String> allowlist;
     private final int maxContentLength;
+    private final int chunkSize;
+    private final int chunkOverlap;
+    private final int embeddingBatchSize;
+    private final int embeddingMaxRetries;
+    private final long embeddingBackoffMs;
 
     public RagService(VectorStore vectorStore, HashingService hashingService, HtmlTextExtractor htmlTextExtractor,
             IngestionLedger ingestionLedger, @Value("${mcp.rag.max-content-length:5242880}") int maxContentLength,
+            @Value("${mcp.rag.chunk-size:800}") int chunkSize,
+            @Value("${mcp.rag.chunk-overlap:80}") int chunkOverlap,
+            @Value("${mcp.rag.embedding-batch-size:24}") int embeddingBatchSize,
+            @Value("${mcp.rag.embedding-max-retries:3}") int embeddingMaxRetries,
+            @Value("${mcp.rag.embedding-backoff-ms:500}") long embeddingBackoffMs,
             @Value("${mcp.rag.allowlist:https://docs.spring.io,https://github.com}") List<String> allowlist) {
         this.vectorStore = vectorStore;
         this.hashingService = hashingService;
         this.htmlTextExtractor = htmlTextExtractor;
         this.ingestionLedger = ingestionLedger;
         this.maxContentLength = maxContentLength;
+        this.chunkSize = chunkSize;
+        this.chunkOverlap = chunkOverlap;
+        this.embeddingBatchSize = Math.max(1, embeddingBatchSize);
+        this.embeddingMaxRetries = Math.max(0, embeddingMaxRetries);
+        this.embeddingBackoffMs = Math.max(0, embeddingBackoffMs);
         this.allowlist = Set.copyOf(allowlist);
         ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxContentLength))
@@ -87,9 +107,12 @@ public class RagService {
         }
 
         List<Document> docs = splitToDocuments(content, documentHash, documentKey, sourceType, library, version, url);
-        vectorStore.add(docs);
-        ingestionLedger.record(documentHash);
-        return new RagIngestionResponse(documentHash, docs.size(), 0, List.of());
+        IngestionResult ingestionResult = addDocumentsWithRetries(docs);
+        if (ingestionResult.chunksSkipped() == 0) {
+            ingestionLedger.record(documentHash);
+        }
+        return new RagIngestionResponse(documentHash, ingestionResult.chunksStored(), ingestionResult.chunksSkipped(),
+                ingestionResult.warnings());
     }
 
     public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
@@ -176,9 +199,7 @@ public class RagService {
     private List<Document> splitToDocuments(String content, String docHash, String documentKey, String sourceType,
             String library, String version, String url) {
         List<Document> docs = new ArrayList<>();
-        int chunkSize = 800;
-        int overlap = 80;
-        int step = Math.max(1, chunkSize - overlap);
+        int step = Math.max(1, chunkSize - chunkOverlap);
         int start = 0;
         int idx = 0;
         while (start < content.length()) {
@@ -202,6 +223,67 @@ public class RagService {
         return docs;
     }
 
+    private IngestionResult addDocumentsWithRetries(List<Document> docs) {
+        IngestionResult result = new IngestionResult();
+        int index = 0;
+        while (index < docs.size()) {
+            int end = Math.min(docs.size(), index + embeddingBatchSize);
+            List<Document> batch = docs.subList(index, end);
+            addBatchWithRetry(batch, result, embeddingMaxRetries);
+            index = end;
+        }
+        return result;
+    }
+
+    private void addBatchWithRetry(List<Document> batch, IngestionResult result, int retriesLeft) {
+        try {
+            vectorStore.add(batch);
+            result.addStored(batch.size());
+        } catch (RuntimeException ex) {
+            if (!isReadTimeout(ex)) {
+                throw ex;
+            }
+            if (batch.size() > 1) {
+                int mid = batch.size() / 2;
+                addBatchWithRetry(batch.subList(0, mid), result, embeddingMaxRetries);
+                addBatchWithRetry(batch.subList(mid, batch.size()), result, embeddingMaxRetries);
+                return;
+            }
+            if (retriesLeft > 0) {
+                waitBeforeRetry(embeddingMaxRetries - retriesLeft + 1);
+                addBatchWithRetry(batch, result, retriesLeft - 1);
+                return;
+            }
+            logger.warn("Embedding timeout for chunk {}, skipping.", batch.get(0).getMetadata().get("chunkIndex"),
+                    ex);
+            result.addSkipped(1);
+            result.addWarning("embedding-timeout");
+        }
+    }
+
+    private void waitBeforeRetry(int attempt) {
+        if (embeddingBackoffMs <= 0) {
+            return;
+        }
+        long delayMs = embeddingBackoffMs * Math.max(1, attempt);
+        try {
+            TimeUnit.MILLISECONDS.sleep(delayMs);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private boolean isReadTimeout(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
     private boolean matchesFilters(Document doc, Map<String, Object> filters) {
         if (filters == null || filters.isEmpty()) {
             return true;
@@ -222,6 +304,36 @@ public class RagService {
 
         ContentTooLargeException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    private static class IngestionResult {
+        private int chunksStored;
+        private int chunksSkipped;
+        private final List<String> warnings = new ArrayList<>();
+
+        void addStored(int count) {
+            chunksStored += count;
+        }
+
+        void addSkipped(int count) {
+            chunksSkipped += count;
+        }
+
+        void addWarning(String warning) {
+            warnings.add(warning);
+        }
+
+        int chunksStored() {
+            return chunksStored;
+        }
+
+        int chunksSkipped() {
+            return chunksSkipped;
+        }
+
+        List<String> warnings() {
+            return warnings;
         }
     }
 }

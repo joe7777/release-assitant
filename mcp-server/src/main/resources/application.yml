@@ -57,6 +57,9 @@ mcp:
     max-content-length: ${RAG_MAX_CONTENT_LENGTH:5242880}
     chunk-size: ${RAG_CHUNK_SIZE:800}
     chunk-overlap: ${RAG_CHUNK_OVERLAP:80}
+    embedding-batch-size: ${RAG_EMBEDDING_BATCH_SIZE:24}
+    embedding-max-retries: ${RAG_EMBEDDING_MAX_RETRIES:3}
+    embedding-backoff-ms: ${RAG_EMBEDDING_BACKOFF_MS:500}
     collection: ${RAG_COLLECTION:mcp_documents}
     baseline-do-ingest: ${RAG_BASELINE_DO_INGEST:false}
     text-normalization: true
