@@ -5,8 +5,6 @@ RAG_BASE_URL=${RAG_BASE_URL:-"http://localhost:8085"}
 DRY_RUN=${DRY_RUN:-false}
 LOG_DIR=${LOG_DIR:-logs}
 VERSIONS_FILE=${VERSIONS_FILE:-"rag_sources/spring_versions.txt"}
-TAG_OR_BRANCH=${TAG_OR_BRANCH:-""}
-INCLUDE_JAVADOC=${INCLUDE_JAVADOC:-false}
 MAX_FILES=${MAX_FILES:-""}
 FORCE=${FORCE:-false}
 INCLUDE_TESTS=${INCLUDE_TESTS:-false}
@@ -41,8 +39,6 @@ while IFS= read -r version; do
 {
   "version": "$version",
   "modules": $modules_json,
-  "tagOrBranch": "${TAG_OR_BRANCH}",
-  "includeJavadoc": ${INCLUDE_JAVADOC},
   "maxFiles": ${max_files_json},
   "force": ${FORCE},
   "includeTests": ${INCLUDE_TESTS}

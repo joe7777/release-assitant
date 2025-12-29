@@ -40,6 +40,19 @@ public class IngestionLedger {
         persist();
     }
 
+    public synchronized boolean alreadyIngestedChunk(String chunkHash) {
+        return documentHashes.contains(chunkKey(chunkHash));
+    }
+
+    public synchronized void recordChunk(String chunkHash) {
+        documentHashes.add(chunkKey(chunkHash));
+        persist();
+    }
+
+    private String chunkKey(String chunkHash) {
+        return "chunk:" + chunkHash;
+    }
+
     private Set<String> readExisting() throws IOException {
         if (!Files.exists(ledgerPath)) {
             return Set.of();

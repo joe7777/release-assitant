@@ -135,7 +135,7 @@ Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessou
 | `rag.ingestText` | Ingère un texte brut. | `{"type":"object","properties":{"sourceType":{"type":"string"},"library":{"type":"string"},"version":{"type":"string"},"content":{"type":"string"},"url":{"type":"string"},"docId":{"type":"string"}},"required":["sourceType","library","version","content"]}` | `{"type":"object","properties":{"documentHash":{"type":"string"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | Idempotent par `documentHash`. |
 | `rag.search` | Recherche des chunks dans Qdrant. | `{"type":"object","properties":{"query":{"type":"string"},"filters":{"type":"object"},"topK":{"type":"integer"}},"required":["query"]}` | `{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"score":{"type":"number"},"metadata":{"type":"object"}}}}` | `filters` sont appliqués côté client dans `rag.findApiChanges`. |
 | `rag.ensureBaselineIngested` | Vérifie les ingestions baseline. | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"libs":{"type":"array","items":{"type":"string"}}},"required":["targetSpringVersion","libs"]}` | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"missingDocuments":{"type":"array","items":{"type":"string"}}}}` | Utilisé pour vérifier l'état des sources RAG. |
-| `rag.ingestSpringSource` | Ingère le code source Spring Framework (multi-versions). | `{"type":"object","properties":{"version":{"type":"string"},"modules":{"type":"array","items":{"type":"string"}},"tagOrBranch":{"type":"string"},"includeJavadoc":{"type":"boolean"},"maxFiles":{"type":"integer"},"force":{"type":"boolean"},"includeTests":{"type":"boolean"}},"required":["version"]}` | `{"type":"object","properties":{"version":{"type":"string"},"ref":{"type":"string"},"commit":{"type":"string"},"filesScanned":{"type":"integer"},"filesIngested":{"type":"integer"},"filesSkipped":{"type":"integer"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | Repo fixée à `spring-projects/spring-framework`. |
+| `rag.ingestSpringSource` | Ingère le code source Spring Framework (multi-versions). | `{"type":"object","properties":{"version":{"type":"string"},"modules":{"type":"array","items":{"type":"string"}},"includeGlobs":{"type":"array","items":{"type":"string"}},"excludeGlobs":{"type":"array","items":{"type":"string"}},"includeTests":{"type":"boolean"},"includeNonJava":{"type":"boolean"},"maxFiles":{"type":"integer"},"maxFileBytes":{"type":"integer"},"maxLinesPerFile":{"type":"integer"},"force":{"type":"boolean"},"chunkSize":{"type":"integer"},"chunkOverlap":{"type":"integer"},"includeKotlin":{"type":"boolean"}},"required":["version"]}` | `{"type":"object","properties":{"version":{"type":"string"},"modulesRequested":{"type":"array","items":{"type":"string"}},"filesScanned":{"type":"integer"},"filesIngested":{"type":"integer"},"filesSkipped":{"type":"integer"},"skipReasons":{"type":"object"},"durationMs":{"type":"integer"}}}` | Repo fixée à `spring-projects/spring-framework`. |
 | `rag.findApiChanges` | Compare les changements API via RAG entre deux versions. | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"topK":{"type":"integer"}},"required":["symbol","fromVersion","toVersion"]}` | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"summary":{"type":"string"},"fromMatches":{"type":"array","items":{"type":"object"}},"toMatches":{"type":"array","items":{"type":"object"}}}}` | V1 = comparaison RAG (pas un diff Git). |
 | `methodology.getRules` | Retourne les règles de méthodologie. | `{"type":"object","properties":{}}` | `{"type":"object","properties":{"version":{"type":"string"},"rules":{"type":"array","items":{"type":"string"}}}}` | Utilisé pour l'exposition des règles de calcul. |
 | `methodology.computeWorkpoints` | Calcule les workpoints depuis une liste de changements. | `{"type":"object","properties":{"changesJson":{"type":"string"}},"required":["changesJson"]}` | `{"type":"object","properties":{"totalWorkpoints":{"type":"integer"},"breakdown":{"type":"array","items":{"type":"object"}},"methodologyVersion":{"type":"string"}}}` | `changesJson` est une liste JSON sérialisée de `WorkpointChange`. |
@@ -246,9 +246,8 @@ DRY_RUN=true ./scripts/ingest-baseline.zsh   # vérifie les payloads
 - Variables utiles :
   - `RAG_BASE_URL` (ex: `http://localhost:8085`)
   - `DRY_RUN` (`true/false`)
-  - `TAG_OR_BRANCH` (override de version, ex: `6.1.x`)
   - `MODULES` (liste séparée par virgules, ex: `spring-core,spring-web`)
-  - `MAX_FILES`, `INCLUDE_JAVADOC`, `INCLUDE_TESTS`, `FORCE`
+  - `MAX_FILES`, `INCLUDE_TESTS`, `FORCE`
 
 Exemple :
 ```bash
@@ -256,6 +255,33 @@ export RAG_BASE_URL="http://localhost:8085"
 DRY_RUN=true ./scripts/ingest-spring-sources.zsh
 MODULES="spring-core,spring-web" ./scripts/ingest-spring-sources.zsh
 ```
+
+Exemples d'appels directs :
+
+- Minimal :
+  ```bash
+  curl -sS -X POST "$RAG_BASE_URL/api/rag/ingest/spring-source" \\
+    -H 'Content-Type: application/json' \\
+    -d '{\"version\":\"6.1.4\"}'
+  ```
+- Modules ciblés :
+  ```bash
+  curl -sS -X POST "$RAG_BASE_URL/api/rag/ingest/spring-source" \\
+    -H 'Content-Type: application/json' \\
+    -d '{\"version\":\"6.1.4\",\"modules\":[\"spring-core\",\"spring-web\"]}'
+  ```
+- Inclure les tests :
+  ```bash
+  curl -sS -X POST "$RAG_BASE_URL/api/rag/ingest/spring-source" \\
+    -H 'Content-Type: application/json' \\
+    -d '{\"version\":\"6.1.4\",\"includeTests\":true}'
+  ```
+- Forcer la ré-ingestion :
+  ```bash
+  curl -sS -X POST "$RAG_BASE_URL/api/rag/ingest/spring-source" \\
+    -H 'Content-Type: application/json' \\
+    -d '{\"version\":\"6.1.4\",\"force\":true}'
+  ```
 
 ## Tester le MCP server (sans LLM)
 - Démarrer via Docker Compose (`mcp-server` écoute sur `8085`).
