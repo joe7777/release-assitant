@@ -56,7 +56,8 @@ public class RepoSourceIngestionService {
     private final int chunkOverlap;
     private final boolean normalizeWhitespace;
     private final boolean defaultIncludeTests;
-    private final Set<String> allowedRepoUrls;
+    private final Set<String> allowedSpringRepoUrls;
+    private final Set<String> allowedProjectRepoUrls;
 
     public RepoSourceIngestionService(VectorStore vectorStore, HashingService hashingService,
             IngestionLedger ingestionLedger,
@@ -85,18 +86,8 @@ public class RepoSourceIngestionService {
         this.chunkOverlap = chunkOverlap;
         this.normalizeWhitespace = normalizeWhitespace;
         this.defaultIncludeTests = defaultIncludeTests;
-        Set<String> allowed = new HashSet<>();
-        if (allowedRepoUrls != null) {
-            allowedRepoUrls.stream()
-                    .filter(url -> url != null && !url.isBlank())
-                    .forEach(allowed::add);
-        }
-        if (projectRepoUrls != null) {
-            projectRepoUrls.stream()
-                    .filter(url -> url != null && !url.isBlank())
-                    .forEach(allowed::add);
-        }
-        this.allowedRepoUrls = allowed;
+        this.allowedSpringRepoUrls = sanitizeAllowlist(allowedRepoUrls);
+        this.allowedProjectRepoUrls = sanitizeAllowlist(projectRepoUrls);
     }
 
     public SpringSourceIngestionResponse ingest(SpringSourceIngestionRequest request, RepoSourceConfig config)
@@ -124,7 +115,7 @@ public class RepoSourceIngestionService {
 
         List<String> modulePatterns = normalizeModulePatterns(request.modules(), config.defaultModules());
         List<PathMatcher> moduleMatchers = toMatchers(modulePatterns);
-        Path repoPath = ensureRepo(config.repoUrl(), config.repoSlug());
+        Path repoPath = ensureRepo(config);
         String commit;
         try (Git git = Git.open(repoPath.toFile())) {
             fetch(git);
@@ -371,17 +362,46 @@ public class RepoSourceIngestionService {
                 .collect(Collectors.toList());
     }
 
-    private Path ensureRepo(String repoUrl, String repoSlug) throws GitAPIException {
-        if (!allowedRepoUrls.isEmpty() && !allowedRepoUrls.contains(repoUrl)) {
+    private Path ensureRepo(RepoSourceConfig config) throws GitAPIException {
+        String repoUrl = config.repoUrl();
+        if (isRepoRestricted(config)) {
             throw new IllegalArgumentException("Repository not allowed: " + repoUrl);
         }
-        Path repoPath = cacheRoot.resolve(repoSlug);
+        Path repoPath = cacheRoot.resolve(config.repoSlug());
         if (Files.exists(repoPath.resolve(".git"))) {
             return repoPath;
         }
         logger.info("Cloning repository {} into {}", repoUrl, repoPath);
         Git.cloneRepository().setURI(repoUrl).setDirectory(repoPath.toFile()).call().close();
         return repoPath;
+    }
+
+    private Set<String> sanitizeAllowlist(List<String> allowlist) {
+        if (allowlist == null || allowlist.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> allowed = new HashSet<>();
+        allowlist.stream()
+                .filter(url -> url != null && !url.isBlank())
+                .forEach(allowed::add);
+        return Set.copyOf(allowed);
+    }
+
+    private boolean isRepoRestricted(RepoSourceConfig config) {
+        Set<String> allowlist = isProjectSource(config) ? allowedProjectRepoUrls : allowedSpringRepoUrls;
+        return !allowlist.isEmpty() && !allowlist.contains(config.repoUrl());
+    }
+
+    private boolean isProjectSource(RepoSourceConfig config) {
+        if (config == null) {
+            return false;
+        }
+        String documentKeyPrefix = config.documentKeyPrefix();
+        if (documentKeyPrefix != null && !documentKeyPrefix.isBlank()) {
+            return documentKeyPrefix.toUpperCase(Locale.ROOT).startsWith("PROJECT");
+        }
+        String sourceType = config.sourceType();
+        return sourceType != null && sourceType.toUpperCase(Locale.ROOT).startsWith("PROJECT");
     }
 
     private void fetch(Git git) {
