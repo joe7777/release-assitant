@@ -1,0 +1,7 @@
+# A) Ton projet (code)
+objective: permettre au LLM de retrouver où tu utilises des API Spring / configs.
+repoUrl: https://github.com/joe7777/pet-clinic
+ref: main
+sourceType: PROJECT_CODE
+filters: java only, skip tests, maxFiles raisonnable
+maxFiles: 5000
