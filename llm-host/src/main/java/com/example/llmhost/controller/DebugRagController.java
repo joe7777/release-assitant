@@ -2,17 +2,21 @@ package com.example.llmhost.controller;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.example.llmhost.api.DebugRagTestRequest;
 import com.example.llmhost.api.DebugRagTestResponse;
 import com.example.llmhost.api.DebugToolsResponse;
 import com.example.llmhost.config.AppProperties;
+import com.example.llmhost.service.RagContextBuilder;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -36,20 +40,23 @@ public class DebugRagController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DebugRagController.class);
     private static final String TOOL_NAME = "rag.search";
+    private static final Pattern SOURCE_CITATION_PATTERN = Pattern.compile("\\[(S\\d+)]");
 
     private final List<ToolCallback> toolCallbacks;
     private final ObjectMapper objectMapper;
     private final ChatClient chatClient;
     private final AppProperties appProperties;
     private final SimpleLoggerAdvisor loggingAdvisor;
+    private final RagContextBuilder ragContextBuilder;
 
     public DebugRagController(List<ToolCallback> toolCallbacks, ObjectMapper objectMapper, ChatClient chatClient,
-            AppProperties appProperties) {
+            AppProperties appProperties, RagContextBuilder ragContextBuilder) {
         this.toolCallbacks = toolCallbacks;
         this.objectMapper = objectMapper;
         this.chatClient = chatClient;
         this.appProperties = appProperties;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
+        this.ragContextBuilder = ragContextBuilder;
     }
 
     @GetMapping("/tools")
@@ -74,12 +81,17 @@ public class DebugRagController {
 
         String toolInput = buildToolInput(request.query(), request.filters(), topK);
         List<RagSearchResult> results = invokeSearch(toolCallback, toolInput);
-        List<DebugRagTestResponse.Result> responseResults = results.stream()
-                .map(result -> new DebugRagTestResponse.Result(result.score(), result.text(), result.metadata()))
+        List<DebugRagTestResponse.RagHit> responseResults = results.stream()
+                .map(result -> new DebugRagTestResponse.RagHit(result.score(), result.text(), result.metadata()))
                 .toList();
 
-        DebugRagTestResponse.Retrieval retrieval = new DebugRagTestResponse.Retrieval(topK, responseResults);
-        DebugRagTestResponse.Llm llm = buildLlmResponse(callLlm, request, results, maxContextChars);
+        DebugRagTestResponse.Retrieval retrieval = new DebugRagTestResponse.Retrieval(
+                topK,
+                request.query(),
+                request.filters(),
+                responseResults
+        );
+        DebugRagTestResponse.Llm llm = buildLlmResponse(callLlm, request, responseResults, maxContextChars);
 
         return new DebugRagTestResponse(retrieval, llm);
     }
@@ -126,8 +138,9 @@ public class DebugRagController {
             return List.of();
         }
         try {
-            return objectMapper.readValue(response, new TypeReference<>() {
-            });
+            JsonNode node = objectMapper.readTree(response);
+            List<RagSearchResult> results = parseSearchResults(node);
+            return normalizeStringifiedResults(results);
         }
         catch (Exception ex) {
             throw new IllegalStateException("Impossible de lire la réponse rag.search", ex);
@@ -135,19 +148,16 @@ public class DebugRagController {
     }
 
     private DebugRagTestResponse.Llm buildLlmResponse(boolean callLlm, DebugRagTestRequest request,
-            List<RagSearchResult> results, int maxContextChars) {
+            List<DebugRagTestResponse.RagHit> results, int maxContextChars) {
         if (!callLlm) {
             return new DebugRagTestResponse.Llm(false, null, List.of(), List.of());
         }
 
-        String context = buildContext(results, maxContextChars);
-        String systemPrompt = "Tu es un assistant rigoureux. "
-                + "Tu dois répondre uniquement à partir du CONTEXT fourni. "
-                + "N'invente aucune information. "
-                + "Cite explicitement les documentKey utilisés dans ta réponse.";
+        String context = ragContextBuilder.buildContext(results, maxContextChars);
+        String systemPrompt = "Tu dois répondre uniquement avec ce qui est dans les sources. "
+                + "Chaque point doit citer [S#].";
 
-        String userPrompt = request.llmQuestion();
-        String fullUserPrompt = "CONTEXT:\n" + context + "\n\nQUESTION:\n" + userPrompt;
+        String fullUserPrompt = "QUESTION:\n" + request.llmQuestion() + "\n\n" + context;
 
         String answer = chatClient.prompt()
                 .system(systemPrompt)
@@ -157,65 +167,118 @@ public class DebugRagController {
                 .call()
                 .content();
 
-        List<String> documentKeys = results.stream()
-                .map(result -> resolveMetadataString(result.metadata(), "documentKey"))
-                .filter(StringUtils::hasText)
-                .distinct()
-                .toList();
+        List<String> citationsFound = extractCitationsFound(answer, results);
+        List<String> missingCitations = computeMissingCitations(results, citationsFound);
 
-        List<String> citationsFound = documentKeys.stream()
-                .filter(key -> answer != null && answer.contains(key))
-                .toList();
-        List<String> missingCitations = documentKeys.stream()
-                .filter(key -> citationsFound.stream().noneMatch(found -> Objects.equals(found, key)))
-                .toList();
-
-        if (documentKeys.isEmpty() || citationsFound.isEmpty()) {
-            LOGGER.warn("RAG debug: aucune citation documentKey détectée dans la réponse LLM.");
+        if (!results.isEmpty() && citationsFound.isEmpty()) {
+            LOGGER.warn("RAG debug: aucune citation détectée dans la réponse LLM.");
         }
 
         return new DebugRagTestResponse.Llm(true, answer, citationsFound, missingCitations);
     }
 
-    private String buildContext(List<RagSearchResult> results, int maxContextChars) {
-        if (results.isEmpty()) {
-            return "Aucun chunk retourné.";
+    private List<RagSearchResult> parseSearchResults(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return List.of();
         }
-        StringBuilder builder = new StringBuilder();
-        for (RagSearchResult result : results) {
-            String section = formatResult(result);
-            if (builder.length() + section.length() > maxContextChars) {
-                int remaining = maxContextChars - builder.length();
-                if (remaining > 0) {
-                    builder.append(section, 0, Math.min(section.length(), remaining));
-                }
-                break;
+        if (node.isArray()) {
+            return objectMapper.convertValue(node, new TypeReference<>() {
+            });
+        }
+        if (node.has("results") && node.get("results").isArray()) {
+            return objectMapper.convertValue(node.get("results"), new TypeReference<>() {
+            });
+        }
+        if (node.has("text") && node.get("text").isTextual()) {
+            // Ne jamais propager une liste JSON stringifiée dans "text": on perd la structure des chunks.
+            return parseSearchResultsFromString(node.get("text").asText());
+        }
+        throw new IllegalStateException("Format de réponse rag.search inattendu: " + node);
+    }
+
+    private List<RagSearchResult> normalizeStringifiedResults(List<RagSearchResult> results) {
+        if (results == null || results.isEmpty()) {
+            return List.of();
+        }
+        if (results.size() == 1 && looksLikeJsonArray(results.get(0).text())) {
+            List<RagSearchResult> parsed = parseSearchResultsFromString(results.get(0).text());
+            if (!parsed.isEmpty()) {
+                return parsed;
             }
-            builder.append(section);
         }
-        return builder.toString();
+        return results;
     }
 
-    private String formatResult(RagSearchResult result) {
-        Map<String, Object> metadata = result.metadata() == null ? Map.of() : result.metadata();
-        String citations = List.of(
-                        formatMetadata(metadata, "documentKey"),
-                        formatMetadata(metadata, "filePath"),
-                        formatMetadata(metadata, "url"),
-                        formatMetadata(metadata, "version")
-                ).stream()
-                .filter(StringUtils::hasText)
-                .collect(Collectors.joining(" | "));
-
-        return "---\n" + citations + "\n" + result.text() + "\n\n";
+    private List<RagSearchResult> parseSearchResultsFromString(String payload) {
+        if (!StringUtils.hasText(payload)) {
+            return List.of();
+        }
+        String trimmed = payload.trim();
+        try {
+            JsonNode node = objectMapper.readTree(trimmed);
+            if (node != null && node.isArray()) {
+                return objectMapper.convertValue(node, new TypeReference<>() {
+                });
+            }
+        }
+        catch (Exception ex) {
+            // Fall through to legacy handling below.
+        }
+        return List.of(new RagSearchResult(trimmed, 0.0, Map.of()));
     }
 
-    private String formatMetadata(Map<String, Object> metadata, String key) {
-        String value = resolveMetadataString(metadata, key);
-        if (!StringUtils.hasText(value)) {
-            return "";
+    private boolean looksLikeJsonArray(String payload) {
+        if (!StringUtils.hasText(payload)) {
+            return false;
         }
-        return key + ": " + value;
+        String trimmed = payload.trim();
+        return trimmed.startsWith("[") && trimmed.endsWith("]");
+    }
+
+    private List<String> extractCitationsFound(String answer, List<DebugRagTestResponse.RagHit> hits) {
+        if (!StringUtils.hasText(answer)) {
+            return List.of();
+        }
+        Set<String> found = new LinkedHashSet<>();
+        Matcher matcher = SOURCE_CITATION_PATTERN.matcher(answer);
+        while (matcher.find()) {
+            found.add(matcher.group(1));
+        }
+        for (DebugRagTestResponse.RagHit hit : hits) {
+            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
+            String documentKey = resolveMetadataString(metadata, "documentKey");
+            if (StringUtils.hasText(documentKey) && answer.contains("documentKey=" + documentKey)) {
+                found.add("documentKey=" + documentKey);
+            }
+            String url = resolveMetadataString(metadata, "url");
+            if (StringUtils.hasText(url) && answer.contains("url=" + url)) {
+                found.add("url=" + url);
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    private List<String> computeMissingCitations(List<DebugRagTestResponse.RagHit> hits, List<String> found) {
+        Set<String> expected = new LinkedHashSet<>();
+        for (int i = 0; i < hits.size(); i++) {
+            DebugRagTestResponse.RagHit hit = hits.get(i);
+            expected.add("S" + (i + 1));
+            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
+            String documentKey = resolveMetadataString(metadata, "documentKey");
+            if (StringUtils.hasText(documentKey)) {
+                expected.add("documentKey=" + documentKey);
+            }
+            String url = resolveMetadataString(metadata, "url");
+            if (StringUtils.hasText(url)) {
+                expected.add("url=" + url);
+            }
+        }
+        if (expected.isEmpty()) {
+            return List.of();
+        }
+        Set<String> missing = new LinkedHashSet<>(expected);
+        missing.removeAll(found);
+        return List.copyOf(missing);
     }
 
     private String resolveMetadataString(Map<String, Object> metadata, String key) {
