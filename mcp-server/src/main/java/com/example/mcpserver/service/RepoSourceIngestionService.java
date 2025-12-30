@@ -70,7 +70,8 @@ public class RepoSourceIngestionService {
             @Value("${mcp.spring-source.include-tests:false}") boolean defaultIncludeTests,
             @Value("${mcp.repo-source.allowlist:"
                     + "https://github.com/spring-projects/spring-framework,"
-                    + "https://github.com/spring-projects/spring-boot}") List<String> allowedRepoUrls)
+                    + "https://github.com/spring-projects/spring-boot}") List<String> allowedRepoUrls,
+            @Value("${mcp.project-source.allowlist:}") List<String> projectRepoUrls)
             throws IOException {
         this.vectorStore = vectorStore;
         this.hashingService = hashingService;
@@ -84,7 +85,18 @@ public class RepoSourceIngestionService {
         this.chunkOverlap = chunkOverlap;
         this.normalizeWhitespace = normalizeWhitespace;
         this.defaultIncludeTests = defaultIncludeTests;
-        this.allowedRepoUrls = allowedRepoUrls == null ? Set.of() : new HashSet<>(allowedRepoUrls);
+        Set<String> allowed = new HashSet<>();
+        if (allowedRepoUrls != null) {
+            allowedRepoUrls.stream()
+                    .filter(url -> url != null && !url.isBlank())
+                    .forEach(allowed::add);
+        }
+        if (projectRepoUrls != null) {
+            projectRepoUrls.stream()
+                    .filter(url -> url != null && !url.isBlank())
+                    .forEach(allowed::add);
+        }
+        this.allowedRepoUrls = allowed;
     }
 
     public SpringSourceIngestionResponse ingest(SpringSourceIngestionRequest request, RepoSourceConfig config)
@@ -360,7 +372,7 @@ public class RepoSourceIngestionService {
     }
 
     private Path ensureRepo(String repoUrl, String repoSlug) throws GitAPIException {
-        if (!allowedRepoUrls.contains(repoUrl)) {
+        if (!allowedRepoUrls.isEmpty() && !allowedRepoUrls.contains(repoUrl)) {
             throw new IllegalArgumentException("Repository not allowed: " + repoUrl);
         }
         Path repoPath = cacheRoot.resolve(repoSlug);

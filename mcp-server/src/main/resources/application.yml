@@ -23,6 +23,14 @@ spring:
     name: mcp-server
   profiles:
     default: qdrant
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+  paths-to-match:
+    - /api/rag/**
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://ollama:11434}

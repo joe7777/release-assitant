@@ -12,10 +12,13 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import com.example.mcpserver.dto.ApiChangeResponse;
+import com.example.mcpserver.dto.ProjectSourceIngestionRequest;
+import com.example.mcpserver.dto.ProjectSourceIngestionResponse;
 import com.example.mcpserver.dto.RagIngestionResponse;
 import com.example.mcpserver.dto.RagSearchResult;
 import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
+import com.example.mcpserver.service.ProjectSourceIngestionService;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
 import com.example.mcpserver.service.SpringBootSourceIngestionService;
@@ -29,14 +32,17 @@ public class RagController {
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
     private final SpringBootSourceIngestionService springBootSourceIngestionService;
+    private final ProjectSourceIngestionService projectSourceIngestionService;
 
     public RagController(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
             SpringApiChangeService springApiChangeService,
-            SpringBootSourceIngestionService springBootSourceIngestionService) {
+            SpringBootSourceIngestionService springBootSourceIngestionService,
+            ProjectSourceIngestionService projectSourceIngestionService) {
         this.ragService = ragService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
         this.springBootSourceIngestionService = springBootSourceIngestionService;
+        this.projectSourceIngestionService = projectSourceIngestionService;
     }
 
     @PostMapping("/ingest/html")
@@ -70,6 +76,14 @@ public class RagController {
     public Mono<ResponseEntity<SpringSourceIngestionResponse>> ingestSpringBootSource(
             @RequestBody SpringSourceIngestionRequest request) {
         return Mono.fromCallable(() -> springBootSourceIngestionService.ingestSpringBootSource(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
+    }
+
+    @PostMapping("/ingest/project")
+    public Mono<ResponseEntity<ProjectSourceIngestionResponse>> ingestProject(
+            @RequestBody ProjectSourceIngestionRequest request) {
+        return Mono.fromCallable(() -> projectSourceIngestionService.ingestProject(request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
     }
