@@ -1,23 +1,25 @@
 package com.example.llmhost.controller;
 
 import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.example.llmhost.api.DebugRagTestRequest;
 import com.example.llmhost.api.DebugRagTestResponse;
+import com.example.llmhost.api.DebugRagSearchRequest;
+import com.example.llmhost.api.DebugRagSearchResponse;
+import com.example.llmhost.api.DebugRagWithSourcesRequest;
+import com.example.llmhost.api.DebugRagWithSourcesResponse;
 import com.example.llmhost.api.DebugToolsResponse;
 import com.example.llmhost.config.AppProperties;
+import com.example.llmhost.config.SystemPromptProvider;
+import com.example.llmhost.rag.CitationValidator;
+import com.example.llmhost.rag.CitationValidator.CitationValidationResult;
+import com.example.llmhost.rag.CitationValidator.RetryDirective;
+import com.example.llmhost.rag.CitationValidator.RetryReason;
+import com.example.llmhost.rag.RagHit;
+import com.example.llmhost.rag.RagSearchClient;
 import com.example.llmhost.service.RagContextBuilder;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,24 +41,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class DebugRagController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DebugRagController.class);
-    private static final String TOOL_NAME = "rag.search";
-    private static final Pattern SOURCE_CITATION_PATTERN = Pattern.compile("\\[(S\\d+)]");
 
     private final List<ToolCallback> toolCallbacks;
-    private final ObjectMapper objectMapper;
     private final ChatClient chatClient;
     private final AppProperties appProperties;
     private final SimpleLoggerAdvisor loggingAdvisor;
     private final RagContextBuilder ragContextBuilder;
+    private final RagSearchClient ragSearchClient;
+    private final CitationValidator citationValidator;
+    private final SystemPromptProvider systemPromptProvider;
 
-    public DebugRagController(List<ToolCallback> toolCallbacks, ObjectMapper objectMapper, ChatClient chatClient,
-            AppProperties appProperties, RagContextBuilder ragContextBuilder) {
+    public DebugRagController(List<ToolCallback> toolCallbacks, ChatClient chatClient, AppProperties appProperties,
+            RagContextBuilder ragContextBuilder, RagSearchClient ragSearchClient, CitationValidator citationValidator,
+            SystemPromptProvider systemPromptProvider) {
         this.toolCallbacks = toolCallbacks;
-        this.objectMapper = objectMapper;
         this.chatClient = chatClient;
         this.appProperties = appProperties;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
         this.ragContextBuilder = ragContextBuilder;
+        this.ragSearchClient = ragSearchClient;
+        this.citationValidator = citationValidator;
+        this.systemPromptProvider = systemPromptProvider;
     }
 
     @GetMapping("/tools")
@@ -76,11 +81,7 @@ public class DebugRagController {
             throw new IllegalArgumentException("llmQuestion est requis quand callLlm=true");
         }
 
-        ToolCallback toolCallback = findToolCallback(TOOL_NAME)
-                .orElseThrow(() -> new IllegalStateException("Tool introuvable: " + TOOL_NAME));
-
-        String toolInput = buildToolInput(request.query(), request.filters(), topK);
-        List<RagSearchResult> results = invokeSearch(toolCallback, toolInput);
+        List<RagHit> results = ragSearchClient.search(request.query(), request.filters(), topK);
         List<DebugRagTestResponse.RagHit> responseResults = results.stream()
                 .map(result -> new DebugRagTestResponse.RagHit(result.score(), result.text(), result.metadata()))
                 .toList();
@@ -91,9 +92,23 @@ public class DebugRagController {
                 request.filters(),
                 responseResults
         );
-        DebugRagTestResponse.Llm llm = buildLlmResponse(callLlm, request, responseResults, maxContextChars);
+        DebugRagTestResponse.Llm llm = buildLlmResponse(callLlm, request, results, maxContextChars);
 
         return new DebugRagTestResponse(retrieval, llm);
+    }
+
+    @PostMapping("/ragSearch")
+    public DebugRagSearchResponse ragSearch(@Valid @RequestBody DebugRagSearchRequest request) {
+        int topK = resolveTopK(request.topK());
+        List<RagHit> results = ragSearchClient.search(request.query(), request.filters(), topK);
+        return new DebugRagSearchResponse(results);
+    }
+
+    @PostMapping("/llmWithSources")
+    public DebugRagWithSourcesResponse llmWithSources(@Valid @RequestBody DebugRagWithSourcesRequest request) {
+        int maxContextChars = resolveMaxContextChars(request.maxContextChars());
+        DebugRagTestResponse.Llm llm = buildLlmResponse(true, request.question(), request.hits(), maxContextChars);
+        return new DebugRagWithSourcesResponse(llm);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -111,167 +126,94 @@ public class DebugRagController {
         return resolved > 0 ? resolved : 6000;
     }
 
-    private Optional<ToolCallback> findToolCallback(String name) {
-        return toolCallbacks.stream()
-                .filter(callback -> name.equals(resolveToolName(callback.getToolDefinition())))
-                .findFirst();
-    }
-
-    private String buildToolInput(String query, Map<String, Object> filters, int topK) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("query", query);
-        if (filters != null && !filters.isEmpty()) {
-            payload.put("filters", filters);
-        }
-        payload.put("topK", topK);
-        try {
-            return objectMapper.writeValueAsString(payload);
-        }
-        catch (Exception ex) {
-            throw new IllegalStateException("Impossible de sérialiser la requête rag.search", ex);
-        }
-    }
-
-    private List<RagSearchResult> invokeSearch(ToolCallback toolCallback, String toolInput) {
-        String response = toolCallback.call(toolInput);
-        if (!StringUtils.hasText(response)) {
-            return List.of();
-        }
-        try {
-            JsonNode node = objectMapper.readTree(response);
-            List<RagSearchResult> results = parseSearchResults(node);
-            return normalizeStringifiedResults(results);
-        }
-        catch (Exception ex) {
-            throw new IllegalStateException("Impossible de lire la réponse rag.search", ex);
-        }
-    }
-
     private DebugRagTestResponse.Llm buildLlmResponse(boolean callLlm, DebugRagTestRequest request,
-            List<DebugRagTestResponse.RagHit> results, int maxContextChars) {
+            List<RagHit> results, int maxContextChars) {
+        return buildLlmResponse(callLlm, request.llmQuestion(), results, maxContextChars);
+    }
+
+    private DebugRagTestResponse.Llm buildLlmResponse(boolean callLlm, String question, List<RagHit> results,
+            int maxContextChars) {
         List<DebugRagTestResponse.LlmEvidence> evidence = buildEvidence(results);
         if (!callLlm) {
-            return new DebugRagTestResponse.Llm(false, null, List.of(), List.of(), evidence);
+            return new DebugRagTestResponse.Llm(false, null, List.of(), List.of(), 0.0, "SKIPPED", null, evidence);
         }
 
         String context = ragContextBuilder.buildContext(results, maxContextChars);
         int sourceCount = results.size();
-        String systemPrompt = "Tu dois répondre uniquement avec ce qui est dans les sources. "
-                + "Tu dois produire exactement " + sourceCount + " points (N = nombre de sources). "
-                + "Chaque point i doit citer [Si]. "
-                + "Il est interdit d'écrire \"NON TROUVÉ\" si la source [Si] contient un snippet non vide. "
-                + "Résume le snippet de [Si] et relie-le à la question.";
+        String basePrompt = systemPromptProvider.buildGuidedCitationsPrompt(sourceCount, false, false);
+        String fullUserPrompt = buildUserPrompt(question, context);
+        String answer = callLlm(basePrompt, fullUserPrompt);
 
-        String fullUserPrompt = "QUESTION:\n" + request.llmQuestion() + "\n\n" + context;
+        CitationValidationResult validation = citationValidator.validate(answer, sourceCount);
+        RetryDirective directive = citationValidator.evaluateRetry(validation);
+        if (directive.retry()) {
+            String retryPrompt = buildRetryPrompt(sourceCount, directive.reason());
+            answer = callLlm(retryPrompt, fullUserPrompt);
+            validation = citationValidator.validate(answer, sourceCount);
+        }
 
-        String answer = chatClient.prompt()
+        if (!results.isEmpty() && validation.citationsFound().isEmpty()) {
+            LOGGER.warn("RAG debug: aucune citation détectée dans la réponse LLM.");
+        }
+
+        String status = resolveStatus(validation);
+        String warning = resolveWarning(validation, status);
+
+        return new DebugRagTestResponse.Llm(true, answer, validation.citationsFound(), validation.missingSources(),
+                validation.coverageRatio(), status, warning, evidence);
+    }
+
+    private String buildUserPrompt(String question, String context) {
+        if (!StringUtils.hasText(question)) {
+            return context;
+        }
+        return "QUESTION:\n" + question + "\n\n" + context;
+    }
+
+    private String callLlm(String systemPrompt, String userPrompt) {
+        return chatClient.prompt()
                 .system(systemPrompt)
-                .user(fullUserPrompt)
+                .user(userPrompt)
                 .advisors(loggingAdvisor)
                 .toolCallbacks(Collections.emptyList())
                 .call()
                 .content();
-
-        List<String> citationsFound = extractCitationsFound(answer);
-        List<String> missingCitations = computeMissingCitations(results, citationsFound);
-
-        if (!results.isEmpty() && citationsFound.isEmpty()) {
-            LOGGER.warn("RAG debug: aucune citation détectée dans la réponse LLM.");
-        }
-
-        return new DebugRagTestResponse.Llm(true, answer, citationsFound, missingCitations, evidence);
     }
 
-    private List<RagSearchResult> parseSearchResults(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return List.of();
-        }
-        if (node.isArray()) {
-            return objectMapper.convertValue(node, new TypeReference<>() {
-            });
-        }
-        if (node.has("results") && node.get("results").isArray()) {
-            return objectMapper.convertValue(node.get("results"), new TypeReference<>() {
-            });
-        }
-        if (node.has("text") && node.get("text").isTextual()) {
-            // Ne jamais propager une liste JSON stringifiée dans "text": on perd la structure des chunks.
-            return parseSearchResultsFromString(node.get("text").asText());
-        }
-        throw new IllegalStateException("Format de réponse rag.search inattendu: " + node);
+    private String buildRetryPrompt(int sourceCount, RetryReason reason) {
+        boolean forceCoverage = reason == RetryReason.LOW_COVERAGE;
+        boolean forceAnyCitation = reason == RetryReason.NO_CITATIONS;
+        return systemPromptProvider.buildGuidedCitationsPrompt(sourceCount, forceCoverage, forceAnyCitation);
     }
 
-    private List<RagSearchResult> normalizeStringifiedResults(List<RagSearchResult> results) {
-        if (results == null || results.isEmpty()) {
-            return List.of();
+    private String resolveStatus(CitationValidationResult validation) {
+        if (validation.providedSources() > 0 && validation.citationsFound().isEmpty()) {
+            return "UNVERIFIED";
         }
-        if (results.size() == 1 && looksLikeJsonArray(results.get(0).text())) {
-            List<RagSearchResult> parsed = parseSearchResultsFromString(results.get(0).text());
-            if (!parsed.isEmpty()) {
-                return parsed;
-            }
+        if (validation.providedSources() >= appProperties.getRag().getCitationMinSourcesForCoverage()
+                && validation.coverageRatio() < appProperties.getRag().getCitationCoverageRatio()) {
+            return "PARTIAL";
         }
-        return results;
+        return "VERIFIED";
     }
 
-    private List<RagSearchResult> parseSearchResultsFromString(String payload) {
-        if (!StringUtils.hasText(payload)) {
-            return List.of();
+    private String resolveWarning(CitationValidationResult validation, String status) {
+        if ("UNVERIFIED".equals(status)) {
+            return "Aucune citation détectée malgré des sources disponibles.";
         }
-        String trimmed = payload.trim();
-        try {
-            JsonNode node = objectMapper.readTree(trimmed);
-            if (node != null && node.isArray()) {
-                return objectMapper.convertValue(node, new TypeReference<>() {
-                });
-            }
+        if ("PARTIAL".equals(status)) {
+            return "Couverture des citations insuffisante par rapport aux sources fournies.";
         }
-        catch (Exception ex) {
-            // Fall through to legacy handling below.
-        }
-        return List.of(new RagSearchResult(trimmed, 0.0, Map.of()));
+        return null;
     }
 
-    private boolean looksLikeJsonArray(String payload) {
-        if (!StringUtils.hasText(payload)) {
-            return false;
-        }
-        String trimmed = payload.trim();
-        return trimmed.startsWith("[") && trimmed.endsWith("]");
-    }
-
-    static List<String> extractCitationsFound(String answer) {
-        if (!StringUtils.hasText(answer)) {
-            return List.of();
-        }
-        Set<String> found = new LinkedHashSet<>();
-        Matcher matcher = SOURCE_CITATION_PATTERN.matcher(answer);
-        while (matcher.find()) {
-            found.add(matcher.group(1));
-        }
-        return List.copyOf(found);
-    }
-
-    static List<String> computeMissingCitations(List<DebugRagTestResponse.RagHit> hits, List<String> found) {
-        Set<String> expected = new LinkedHashSet<>();
-        for (int i = 0; i < hits.size(); i++) {
-            expected.add("S" + (i + 1));
-        }
-        if (expected.isEmpty()) {
-            return List.of();
-        }
-        Set<String> missing = new LinkedHashSet<>(expected);
-        missing.removeAll(found);
-        return List.copyOf(missing);
-    }
-
-    private List<DebugRagTestResponse.LlmEvidence> buildEvidence(List<DebugRagTestResponse.RagHit> hits) {
+    private List<DebugRagTestResponse.LlmEvidence> buildEvidence(List<RagHit> hits) {
         if (hits == null || hits.isEmpty()) {
             return List.of();
         }
         List<DebugRagTestResponse.LlmEvidence> evidence = new java.util.ArrayList<>(hits.size());
         for (int i = 0; i < hits.size(); i++) {
-            DebugRagTestResponse.RagHit hit = hits.get(i);
+            RagHit hit = hits.get(i);
             Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
             evidence.add(new DebugRagTestResponse.LlmEvidence(
                     "S" + (i + 1),
@@ -303,8 +245,5 @@ public class DebugRagController {
             return definition.name();
         }
         return "unknown";
-    }
-
-    private record RagSearchResult(String text, double score, Map<String, Object> metadata) {
     }
 }

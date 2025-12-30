@@ -11,6 +11,7 @@ public class AppProperties {
     private final AiProperties ai = new AiProperties();
     private final ToolingProperties tooling = new ToolingProperties();
     private final SafetyProperties safety = new SafetyProperties();
+    private final RagProperties rag = new RagProperties();
     private String systemPrompt;
 
     public AiProperties getAi() {
@@ -23,6 +24,10 @@ public class AppProperties {
 
     public SafetyProperties getSafety() {
         return safety;
+    }
+
+    public RagProperties getRag() {
+        return rag;
     }
 
     public String getSystemPrompt() {
@@ -159,6 +164,37 @@ public class AppProperties {
 
         public void setRagTopK(int ragTopK) {
             this.ragTopK = ragTopK;
+        }
+    }
+
+    public static class RagProperties {
+
+        private double citationCoverageRatio = 0.5;
+        private int citationMinSourcesForCoverage = 4;
+        private int citationMinSourcesRequired = 1;
+
+        public double getCitationCoverageRatio() {
+            return citationCoverageRatio;
+        }
+
+        public void setCitationCoverageRatio(double citationCoverageRatio) {
+            this.citationCoverageRatio = citationCoverageRatio;
+        }
+
+        public int getCitationMinSourcesForCoverage() {
+            return citationMinSourcesForCoverage;
+        }
+
+        public void setCitationMinSourcesForCoverage(int citationMinSourcesForCoverage) {
+            this.citationMinSourcesForCoverage = citationMinSourcesForCoverage;
+        }
+
+        public int getCitationMinSourcesRequired() {
+            return citationMinSourcesRequired;
+        }
+
+        public void setCitationMinSourcesRequired(int citationMinSourcesRequired) {
+            this.citationMinSourcesRequired = citationMinSourcesRequired;
         }
     }
 }

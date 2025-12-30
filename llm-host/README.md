@@ -53,8 +53,16 @@ curl -X POST http://localhost:8082/debug/ragTest \
 - `retrieval.results[]` : liste des chunks renvoyés par Qdrant (texte + metadata).
 - `llm.used` : indique si un appel LLM a été exécuté.
 - `llm.answer` : réponse brute du LLM (sans tool-calling).
-- `llm.citationsFound` : documentKey présents dans la réponse LLM.
-- `llm.missingCitations` : documentKey manquants (permet de valider que le LLM cite les sources).
+- `llm.citationsFound` : sources `[S#]` détectées dans la réponse LLM.
+- `llm.missingSources` : sources attendues manquantes (permet de valider que le LLM cite les sources).
+- `llm.coverageRatio` : ratio de couverture `citationsFound / sources fournies`.
+- `llm.status` : `VERIFIED`, `PARTIAL`, `UNVERIFIED` ou `SKIPPED`.
+- `llm.warning` : message d'avertissement si la validation des citations échoue.
+
+### Endpoints debug supplémentaires
+
+- `POST /debug/ragSearch` : retourne les hits structurés du tool `rag.search` (contrat JSON array strict).
+- `POST /debug/llmWithSources` : envoie une question + hits au LLM sans tool-calling et renvoie la validation des citations.
 
 ### Vérifier les tools MCP disponibles
 
