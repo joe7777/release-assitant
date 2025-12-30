@@ -23,14 +23,6 @@ spring:
     name: mcp-server
   profiles:
     default: qdrant
-
-springdoc:
-  api-docs:
-    enabled: true
-  swagger-ui:
-    enabled: true
-  paths-to-match:
-    - /api/rag/**
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
@@ -49,6 +41,14 @@ springdoc:
             - com.example.mcpserver.tools
     embeddings:
       metadata-mode: storage
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+  paths-to-match:
+    - /api/rag/**
 
 mcp:
   workspace-root: ${MCP_WORKSPACE_ROOT:workspaces}
