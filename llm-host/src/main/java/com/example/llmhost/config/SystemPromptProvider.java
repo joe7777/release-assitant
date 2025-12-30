@@ -30,4 +30,26 @@ public class SystemPromptProvider {
         joiner.add("Si DRY_RUN est actif, décris les étapes sans appeler les tools.");
         return joiner.toString();
     }
+
+    public String buildGuidedCitationsPrompt(int sourceCount, boolean forceCoverage, boolean forceAnyCitation) {
+        int minSourcesRequired = Math.max(1, properties.getRag().getCitationMinSourcesRequired());
+        double coverageRatio = properties.getRag().getCitationCoverageRatio();
+        int minCoverageSources = properties.getRag().getCitationMinSourcesForCoverage();
+
+        StringJoiner joiner = new StringJoiner("\n");
+        joiner.add("Tu dois répondre uniquement avec les sources.");
+        joiner.add("Chaque affirmation doit citer [S#].");
+        joiner.add("Si des sources existent, tu n'as pas le droit de répondre \"NON TROUVÉ\" sans expliquer pourquoi elles ne sont pas pertinentes.");
+        joiner.add("Cite au moins " + minSourcesRequired + " source(s) ou " + Math.round(coverageRatio * 100) + "% des sources (selon les règles).");
+        if (sourceCount >= minCoverageSources) {
+            joiner.add("Objectif de couverture: au moins " + Math.round(coverageRatio * 100) + "% des sources.");
+        }
+        if (forceAnyCitation) {
+            joiner.add("Obligation stricte: tu dois citer au moins une source [S#].");
+        }
+        if (forceCoverage) {
+            joiner.add("Tu dois citer au moins " + Math.round(coverageRatio * 100) + "% des sources [S#].");
+        }
+        return joiner.toString();
+    }
 }

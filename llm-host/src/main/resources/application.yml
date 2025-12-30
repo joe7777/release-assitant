@@ -44,6 +44,10 @@ app:
   safety:
     allowlist: ${APP_RAG_ALLOWLIST:https://docs.spring.io,https://github.com}
     rag-top-k: ${APP_RAG_TOP_K:6}
+  rag:
+    citation-coverage-ratio: ${APP_RAG_CITATION_COVERAGE_RATIO:0.5}
+    citation-min-sources-for-coverage: ${APP_RAG_CITATION_MIN_SOURCES:4}
+    citation-min-sources-required: ${APP_RAG_CITATION_MIN_REQUIRED:1}
   system-prompt: |
     Tu es un orchestrateur Spring Boot Upgrade Assistant.
     Rôle: décider des tool-calls MCP (project.*, rag.*, methodology.*) pour répondre.

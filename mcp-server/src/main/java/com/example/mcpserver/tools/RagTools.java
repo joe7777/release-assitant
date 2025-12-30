@@ -1,6 +1,7 @@
 package com.example.mcpserver.tools;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +19,8 @@ import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
 import com.example.mcpserver.service.SpringBootSourceIngestionService;
 import com.example.mcpserver.service.SpringSourceIngestionService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class RagTools {
@@ -26,14 +29,16 @@ public class RagTools {
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
     private final SpringBootSourceIngestionService springBootSourceIngestionService;
+    private final ObjectMapper objectMapper;
 
     public RagTools(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
             SpringApiChangeService springApiChangeService,
-            SpringBootSourceIngestionService springBootSourceIngestionService) {
+            SpringBootSourceIngestionService springBootSourceIngestionService, ObjectMapper objectMapper) {
         this.ragService = ragService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
         this.springBootSourceIngestionService = springBootSourceIngestionService;
+        this.objectMapper = objectMapper;
     }
 
     @Tool(name = "rag.ingestFromHtml", description = "Ingère une page HTML dans le RAG")
@@ -49,8 +54,16 @@ public class RagTools {
     }
 
     @Tool(name = "rag.search", description = "Recherche des chunks dans Qdrant")
-    public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
-        return ragService.search(query, filters, topK);
+    public String search(String query, Map<String, Object> filters, int topK) {
+        List<RagSearchResult> results = ragService.search(query, filters, topK);
+        List<RagSearchResult> normalized = results.stream()
+                .map(this::normalizeHit)
+                .toList();
+        try {
+            return objectMapper.writeValueAsString(normalized);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Impossible de sérialiser les résultats rag.search", ex);
+        }
     }
 
     @Tool(name = "rag.ensureBaselineIngested", description = "Vérifie les ingestions baseline")
@@ -73,5 +86,34 @@ public class RagTools {
     @Tool(name = "rag.findApiChanges", description = "Compare des changements API via RAG entre deux versions")
     public ApiChangeResponse findApiChanges(String symbol, String fromVersion, String toVersion, int topK) {
         return springApiChangeService.findApiChanges(symbol, fromVersion, toVersion, topK);
+    }
+
+    private RagSearchResult normalizeHit(RagSearchResult hit) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (hit.metadata() != null) {
+            metadata.putAll(hit.metadata());
+        }
+        ensureMetadataKey(metadata, "sourceType");
+        ensureMetadataKey(metadata, "library");
+        ensureMetadataKey(metadata, "version");
+        ensureMetadataKey(metadata, "documentKey");
+        ensureMetadataKey(metadata, "chunkIndex");
+        metadata.putIfAbsent("url", null);
+        metadata.putIfAbsent("filePath", null);
+
+        double score = normalizeScore(hit.score(), metadata);
+        return new RagSearchResult(hit.text(), score, metadata);
+    }
+
+    private void ensureMetadataKey(Map<String, Object> metadata, String key) {
+        metadata.putIfAbsent(key, null);
+    }
+
+    private double normalizeScore(double rawScore, Map<String, Object> metadata) {
+        if (rawScore > 1.0) {
+            metadata.putIfAbsent("distance", rawScore);
+            return Math.max(0.0, 1.0 - rawScore);
+        }
+        return rawScore;
     }
 }

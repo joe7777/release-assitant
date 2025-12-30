@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
-import com.example.llmhost.api.DebugRagTestResponse;
+import com.example.llmhost.rag.RagHit;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -13,14 +13,14 @@ public class RagContextBuilder {
 
     private static final int DEFAULT_SNIPPET_LIMIT = 600;
 
-    public String buildContext(List<DebugRagTestResponse.RagHit> hits, int maxChars) {
+    public String buildContext(List<RagHit> hits, int maxChars) {
         if (hits == null || hits.isEmpty()) {
             return "SOURCES:\n(Aucun chunk retourné.)";
         }
         StringBuilder builder = new StringBuilder();
         builder.append("SOURCES (cite [S#] dans chaque point):\n");
         for (int i = 0; i < hits.size(); i++) {
-            DebugRagTestResponse.RagHit hit = hits.get(i);
+            RagHit hit = hits.get(i);
             String entry = formatHit(i + 1, hit);
             if (builder.length() + entry.length() > maxChars) {
                 int remaining = Math.max(0, maxChars - builder.length());
@@ -34,7 +34,7 @@ public class RagContextBuilder {
         return builder.toString();
     }
 
-    private String formatHit(int index, DebugRagTestResponse.RagHit hit) {
+    private String formatHit(int index, RagHit hit) {
         Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
         StringJoiner joiner = new StringJoiner(" ");
         joiner.add("score=" + hit.score());

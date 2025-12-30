@@ -133,7 +133,7 @@ Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessou
 | `project.detectSpringScope` | Filtre les dépendances Spring. | `{"type":"object","properties":{"dependencies":{"type":"array","items":{"type":"string"}}},"required":["dependencies"]}` | `{"type":"array","items":{"type":"string"}}` | Pratique pour limiter les analyses au scope Spring. |
 | `rag.ingestFromHtml` | Ingère une page HTML dans le RAG. | `{"type":"object","properties":{"url":{"type":"string"},"sourceType":{"type":"string"},"library":{"type":"string"},"version":{"type":"string"},"docId":{"type":"string"},"selectors":{"type":"array","items":{"type":"string"}}},"required":["url","sourceType","library","version"]}` | `{"type":"object","properties":{"documentHash":{"type":"string"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | `url` doit être dans l'allowlist. |
 | `rag.ingestText` | Ingère un texte brut. | `{"type":"object","properties":{"sourceType":{"type":"string"},"library":{"type":"string"},"version":{"type":"string"},"content":{"type":"string"},"url":{"type":"string"},"docId":{"type":"string"}},"required":["sourceType","library","version","content"]}` | `{"type":"object","properties":{"documentHash":{"type":"string"},"chunksStored":{"type":"integer"},"chunksSkipped":{"type":"integer"},"warnings":{"type":"array","items":{"type":"string"}}}}` | Idempotent par `documentHash`. |
-| `rag.search` | Recherche des chunks dans Qdrant. | `{"type":"object","properties":{"query":{"type":"string"},"filters":{"type":"object"},"topK":{"type":"integer"}},"required":["query"]}` | `{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"score":{"type":"number"},"metadata":{"type":"object"}}}}` | `filters` sont appliqués côté client dans `rag.findApiChanges`. |
+| `rag.search` | Recherche des chunks dans Qdrant. | `{"type":"object","properties":{"query":{"type":"string"},"filters":{"type":"object"},"topK":{"type":"integer"}},"required":["query"]}` | `{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"score":{"type":"number"},"metadata":{"type":"object"}}}}` | Réponse = **tableau JSON direct** (pas de wrapper `{results:...}` ni de texte JSON stringifié). |
 | `rag.ensureBaselineIngested` | Vérifie les ingestions baseline. | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"libs":{"type":"array","items":{"type":"string"}}},"required":["targetSpringVersion","libs"]}` | `{"type":"object","properties":{"targetSpringVersion":{"type":"string"},"missingDocuments":{"type":"array","items":{"type":"string"}}}}` | Utilisé pour vérifier l'état des sources RAG. |
 | `rag.ingestSpringSource` | Ingère le code source Spring Framework (multi-versions). | `{"type":"object","properties":{"version":{"type":"string"},"modules":{"type":"array","items":{"type":"string"}},"includeGlobs":{"type":"array","items":{"type":"string"}},"excludeGlobs":{"type":"array","items":{"type":"string"}},"includeTests":{"type":"boolean"},"includeNonJava":{"type":"boolean"},"maxFiles":{"type":"integer"},"maxFileBytes":{"type":"integer"},"maxLinesPerFile":{"type":"integer"},"force":{"type":"boolean"},"chunkSize":{"type":"integer"},"chunkOverlap":{"type":"integer"},"includeKotlin":{"type":"boolean"}},"required":["version"]}` | `{"type":"object","properties":{"version":{"type":"string"},"modulesRequested":{"type":"array","items":{"type":"string"}},"filesScanned":{"type":"integer"},"filesIngested":{"type":"integer"},"filesSkipped":{"type":"integer"},"skipReasons":{"type":"object"},"durationMs":{"type":"integer"}}}` | Repo fixée à `spring-projects/spring-framework`. |
 | `rag.findApiChanges` | Compare les changements API via RAG entre deux versions. | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"topK":{"type":"integer"}},"required":["symbol","fromVersion","toVersion"]}` | `{"type":"object","properties":{"symbol":{"type":"string"},"fromVersion":{"type":"string"},"toVersion":{"type":"string"},"summary":{"type":"string"},"fromMatches":{"type":"array","items":{"type":"object"}},"toMatches":{"type":"array","items":{"type":"object"}}}}` | V1 = comparaison RAG (pas un diff Git). |
@@ -148,6 +148,35 @@ Le `llm-host` accède aux tools exposés par `mcp-server`. Chaque tool ci-dessou
 - **Max content length** : `mcp.rag.max-content-length` (défaut: 1 048 576 bytes).
 - **Chunking** : `mcp.rag.chunk-size` (défaut: 800), `mcp.rag.chunk-overlap` (défaut: 80).
 - **Limite fichiers Spring** : `mcp.spring-source.default-max-files` (défaut: 6000), override par `maxFiles`.
+
+## Contrat stable `rag.search`
+Le tool MCP `rag.search` renvoie **toujours** un JSON array d'objets `{text, score, metadata}`.
+
+Exemple de réponse :
+```json
+[
+  {
+    "text": "Chunk de documentation...",
+    "score": 0.72,
+    "metadata": {
+      "sourceType": "DOCS",
+      "library": "spring-framework",
+      "version": "6.1.5",
+      "documentKey": "SPRING_DOCS/spring-framework/6.1.5",
+      "url": "https://docs.spring.io/...",
+      "filePath": null,
+      "chunkIndex": 3
+    }
+  }
+]
+```
+
+## Validation des citations (LLM Host)
+Le LLM Host vérifie les citations `[S#]` lorsque des sources RAG sont fournies :
+- `coverageRatio = citationsFound / sources fournies`.
+- Si des sources existent et aucune citation n'est détectée, un retry est tenté une fois.
+- Si `sources >= 4` et `coverageRatio < 0.5`, un retry est tenté pour forcer la couverture.
+- Si la validation échoue après retry : statut `UNVERIFIED` + warning.
 
 ## Exemples de prompts (Spring-only)
 - "Clone le dépôt https://github.com/acme/mon-app, détecte les dépendances Spring, puis propose les workpoints."
