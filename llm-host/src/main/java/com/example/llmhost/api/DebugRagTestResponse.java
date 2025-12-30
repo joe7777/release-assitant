@@ -11,6 +11,10 @@ public record DebugRagTestResponse(Retrieval retrieval, Llm llm) {
     public record RagHit(double score, String text, Map<String, Object> metadata) {
     }
 
-    public record Llm(boolean used, String answer, List<String> citationsFound, List<String> missingCitations) {
+    public record Llm(boolean used, String answer, List<String> citationsFound, List<String> missingCitations,
+                      List<LlmEvidence> evidence) {
+    }
+
+    public record LlmEvidence(String source, String documentKey, String url, String version, String library) {
     }
 }

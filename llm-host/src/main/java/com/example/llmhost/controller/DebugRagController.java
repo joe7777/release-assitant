@@ -149,13 +149,18 @@ public class DebugRagController {
 
     private DebugRagTestResponse.Llm buildLlmResponse(boolean callLlm, DebugRagTestRequest request,
             List<DebugRagTestResponse.RagHit> results, int maxContextChars) {
+        List<DebugRagTestResponse.LlmEvidence> evidence = buildEvidence(results);
         if (!callLlm) {
-            return new DebugRagTestResponse.Llm(false, null, List.of(), List.of());
+            return new DebugRagTestResponse.Llm(false, null, List.of(), List.of(), evidence);
         }
 
         String context = ragContextBuilder.buildContext(results, maxContextChars);
+        int sourceCount = results.size();
         String systemPrompt = "Tu dois répondre uniquement avec ce qui est dans les sources. "
-                + "Chaque point doit citer [S#].";
+                + "Tu dois produire exactement " + sourceCount + " points (N = nombre de sources). "
+                + "Chaque point i doit citer [Si]. "
+                + "Il est interdit d'écrire \"NON TROUVÉ\" si la source [Si] contient un snippet non vide. "
+                + "Résume le snippet de [Si] et relie-le à la question.";
 
         String fullUserPrompt = "QUESTION:\n" + request.llmQuestion() + "\n\n" + context;
 
@@ -167,14 +172,14 @@ public class DebugRagController {
                 .call()
                 .content();
 
-        List<String> citationsFound = extractCitationsFound(answer, results);
+        List<String> citationsFound = extractCitationsFound(answer);
         List<String> missingCitations = computeMissingCitations(results, citationsFound);
 
         if (!results.isEmpty() && citationsFound.isEmpty()) {
             LOGGER.warn("RAG debug: aucune citation détectée dans la réponse LLM.");
         }
 
-        return new DebugRagTestResponse.Llm(true, answer, citationsFound, missingCitations);
+        return new DebugRagTestResponse.Llm(true, answer, citationsFound, missingCitations, evidence);
     }
 
     private List<RagSearchResult> parseSearchResults(JsonNode node) {
@@ -235,7 +240,7 @@ public class DebugRagController {
         return trimmed.startsWith("[") && trimmed.endsWith("]");
     }
 
-    private List<String> extractCitationsFound(String answer, List<DebugRagTestResponse.RagHit> hits) {
+    static List<String> extractCitationsFound(String answer) {
         if (!StringUtils.hasText(answer)) {
             return List.of();
         }
@@ -244,34 +249,13 @@ public class DebugRagController {
         while (matcher.find()) {
             found.add(matcher.group(1));
         }
-        for (DebugRagTestResponse.RagHit hit : hits) {
-            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
-            String documentKey = resolveMetadataString(metadata, "documentKey");
-            if (StringUtils.hasText(documentKey) && answer.contains("documentKey=" + documentKey)) {
-                found.add("documentKey=" + documentKey);
-            }
-            String url = resolveMetadataString(metadata, "url");
-            if (StringUtils.hasText(url) && answer.contains("url=" + url)) {
-                found.add("url=" + url);
-            }
-        }
         return List.copyOf(found);
     }
 
-    private List<String> computeMissingCitations(List<DebugRagTestResponse.RagHit> hits, List<String> found) {
+    static List<String> computeMissingCitations(List<DebugRagTestResponse.RagHit> hits, List<String> found) {
         Set<String> expected = new LinkedHashSet<>();
         for (int i = 0; i < hits.size(); i++) {
-            DebugRagTestResponse.RagHit hit = hits.get(i);
             expected.add("S" + (i + 1));
-            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
-            String documentKey = resolveMetadataString(metadata, "documentKey");
-            if (StringUtils.hasText(documentKey)) {
-                expected.add("documentKey=" + documentKey);
-            }
-            String url = resolveMetadataString(metadata, "url");
-            if (StringUtils.hasText(url)) {
-                expected.add("url=" + url);
-            }
         }
         if (expected.isEmpty()) {
             return List.of();
@@ -279,6 +263,25 @@ public class DebugRagController {
         Set<String> missing = new LinkedHashSet<>(expected);
         missing.removeAll(found);
         return List.copyOf(missing);
+    }
+
+    private List<DebugRagTestResponse.LlmEvidence> buildEvidence(List<DebugRagTestResponse.RagHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return List.of();
+        }
+        List<DebugRagTestResponse.LlmEvidence> evidence = new java.util.ArrayList<>(hits.size());
+        for (int i = 0; i < hits.size(); i++) {
+            DebugRagTestResponse.RagHit hit = hits.get(i);
+            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
+            evidence.add(new DebugRagTestResponse.LlmEvidence(
+                    "S" + (i + 1),
+                    resolveMetadataString(metadata, "documentKey"),
+                    resolveMetadataString(metadata, "url"),
+                    resolveMetadataString(metadata, "version"),
+                    resolveMetadataString(metadata, "library")
+            ));
+        }
+        return List.copyOf(evidence);
     }
 
     private String resolveMetadataString(Map<String, Object> metadata, String key) {
