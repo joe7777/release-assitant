@@ -1,13 +1,11 @@
 package com.example.llmhost.rag;
 
+import com.example.llmhost.service.RagSearchResponseParser;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
@@ -56,20 +54,9 @@ public class RagSearchClient {
 
     private List<RagHit> parseResponse(String response) {
         if (!StringUtils.hasText(response)) {
-            throw new IllegalStateException("Invalid rag.search contract: empty response");
+            return List.of();
         }
-        try {
-            JsonNode node = objectMapper.readTree(response);
-            if (!node.isArray()) {
-                throw new IllegalStateException("Invalid rag.search contract: expected JSON array");
-            }
-            return objectMapper.convertValue(node, new TypeReference<>() {
-            });
-        } catch (IllegalStateException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new IllegalStateException("Invalid rag.search contract: unreadable JSON array", ex);
-        }
+        return RagSearchResponseParser.parse(response, objectMapper);
     }
 
     private String resolveToolName(ToolDefinition definition) {
