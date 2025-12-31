@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
@@ -58,16 +57,15 @@ public class ToolCallingChatService {
                 ? Collections.emptyList()
                 : shouldUseTools(request) ? wrapCallbacks(traces) : Collections.emptyList();
 
-        var response = guidedMode
+        String content = guidedMode
                 ? runGuidedUpgrade(request)
                 : chatClient.prompt()
                         .system(systemPromptProvider.buildSystemPrompt())
                         .user(request.prompt())
                         .advisors(loggingAdvisor)
                         .toolCallbacks(callbacks)
-                        .call();
-
-        String content = response.content();
+                        .call()
+                        .content();
         String json = extractFirstJson(content);
 
         boolean toolsUsed = !guidedMode && shouldUseTools(request);
@@ -95,7 +93,7 @@ public class ToolCallingChatService {
         return request.prompt() != null && UPGRADE_PATTERN.matcher(request.prompt()).find();
     }
 
-    private ChatResponse runGuidedUpgrade(ChatRequest request) {
+    private String runGuidedUpgrade(ChatRequest request) {
         requireGuidedFields(request);
         UpgradeContext context = upgradeContextService.retrieve(
                 request.fromVersion(),
@@ -110,7 +108,8 @@ public class ToolCallingChatService {
                 .user(userPrompt)
                 .advisors(loggingAdvisor)
                 .toolCallbacks(Collections.emptyList())
-                .call();
+                .call()
+                .content();
     }
 
     private void requireGuidedFields(ChatRequest request) {
