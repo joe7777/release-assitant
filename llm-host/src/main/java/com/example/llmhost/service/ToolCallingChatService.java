@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
@@ -30,40 +31,47 @@ public class ToolCallingChatService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallingChatService.class);
     private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*?\\}", Pattern.MULTILINE);
+    private static final Pattern UPGRADE_PATTERN = Pattern.compile("\\bupgrade\\b", Pattern.CASE_INSENSITIVE);
 
     private final ChatClient chatClient;
     private final SystemPromptProvider systemPromptProvider;
     private final AppProperties properties;
     private final List<ToolCallback> functionCallbacks;
     private final CallAdvisor loggingAdvisor;
+    private final RagMultiPassUpgradeContext upgradeContextService;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
-            List<ToolCallback> functionCallbacks) {
+            List<ToolCallback> functionCallbacks, RagMultiPassUpgradeContext upgradeContextService) {
         this.chatClient = chatClient;
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
         this.functionCallbacks = functionCallbacks;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
+        this.upgradeContextService = upgradeContextService;
     }
 
     public ChatRunResponse run(ChatRequest request) {
         validatePrompt(request);
         List<ToolCallTrace> traces = new ArrayList<>();
-        List<ToolCallback> callbacks = shouldUseTools(request)
-                ? wrapCallbacks(traces)
-                : Collections.emptyList();
+        boolean guidedMode = isGuidedMode(request);
+        List<ToolCallback> callbacks = guidedMode
+                ? Collections.emptyList()
+                : shouldUseTools(request) ? wrapCallbacks(traces) : Collections.emptyList();
 
-        var response = chatClient.prompt()
-                .system(systemPromptProvider.buildSystemPrompt())
-                .user(request.prompt())
-                .advisors(loggingAdvisor)
-                .toolCallbacks(callbacks)
-                .call();
+        var response = guidedMode
+                ? runGuidedUpgrade(request)
+                : chatClient.prompt()
+                        .system(systemPromptProvider.buildSystemPrompt())
+                        .user(request.prompt())
+                        .advisors(loggingAdvisor)
+                        .toolCallbacks(callbacks)
+                        .call();
 
         String content = response.content();
         String json = extractFirstJson(content);
 
-        return new ChatRunResponse(content, json, traces, shouldUseTools(request));
+        boolean toolsUsed = !guidedMode && shouldUseTools(request);
+        return new ChatRunResponse(content, json, traces, toolsUsed);
     }
 
     private boolean shouldUseTools(ChatRequest request) {
@@ -75,6 +83,53 @@ public class ToolCallingChatService {
         if (StringUtils.hasLength(request.prompt()) && request.prompt().length() > maxLength) {
             throw new IllegalArgumentException("Prompt too long. Limit is " + maxLength + " characters");
         }
+    }
+
+    private boolean isGuidedMode(ChatRequest request) {
+        if (request.mode() == ChatRequest.Mode.GUIDED) {
+            return true;
+        }
+        if (request.mode() == ChatRequest.Mode.AUTO) {
+            return false;
+        }
+        return request.prompt() != null && UPGRADE_PATTERN.matcher(request.prompt()).find();
+    }
+
+    private ChatResponse runGuidedUpgrade(ChatRequest request) {
+        requireGuidedFields(request);
+        UpgradeContext context = upgradeContextService.retrieve(
+                request.fromVersion(),
+                request.toVersion(),
+                request.workspaceId(),
+                request.repoUrl()
+        );
+        String systemPrompt = systemPromptProvider.buildGuidedUpgradePrompt();
+        String userPrompt = buildGuidedUserPrompt(request.prompt(), context.contextText());
+        return chatClient.prompt()
+                .system(systemPrompt)
+                .user(userPrompt)
+                .advisors(loggingAdvisor)
+                .toolCallbacks(Collections.emptyList())
+                .call();
+    }
+
+    private void requireGuidedFields(ChatRequest request) {
+        if (!StringUtils.hasText(request.workspaceId())) {
+            throw new IllegalArgumentException("workspaceId est requis pour le mode GUIDED");
+        }
+        if (!StringUtils.hasText(request.fromVersion())) {
+            throw new IllegalArgumentException("fromVersion est requis pour le mode GUIDED");
+        }
+        if (!StringUtils.hasText(request.toVersion())) {
+            throw new IllegalArgumentException("toVersion est requis pour le mode GUIDED");
+        }
+    }
+
+    private String buildGuidedUserPrompt(String question, String contextText) {
+        if (!StringUtils.hasText(question)) {
+            return contextText;
+        }
+        return "QUESTION:\n" + question + "\n\n" + contextText;
     }
 
     private List<ToolCallback> wrapCallbacks(List<ToolCallTrace> traces) {
