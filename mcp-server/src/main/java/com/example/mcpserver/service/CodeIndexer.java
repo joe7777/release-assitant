@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -26,14 +25,14 @@ public class CodeIndexer {
 
     private static final Logger logger = LoggerFactory.getLogger(CodeIndexer.class);
 
-    private final VectorStore vectorStore;
+    private final VectorStoreAddService vectorStoreAddService;
     private final HashingService hashingService;
     private final int maxFileSizeBytes;
     private final Set<String> allowedExtensions;
 
-    public CodeIndexer(VectorStore vectorStore, HashingService hashingService,
+    public CodeIndexer(VectorStoreAddService vectorStoreAddService, HashingService hashingService,
             @Value("${mcp.rag.max-content-length:5242880}") int maxFileSizeBytes) {
-        this.vectorStore = vectorStore;
+        this.vectorStoreAddService = vectorStoreAddService;
         this.hashingService = hashingService;
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.allowedExtensions = Set.of(".java", ".kt", ".kts", ".groovy", ".xml", ".yml", ".yaml", ".properties",
@@ -62,7 +61,7 @@ public class CodeIndexer {
             for (String chunkText : chunks) {
                 String chunkHash = hashingService.sha256(documentHash + chunkText);
                 Document doc = new Document(chunkText, buildMetadata(metadataBase, file, documentHash, chunkHash));
-                vectorStore.add(List.of(doc));
+                vectorStoreAddService.add(List.of(doc));
                 chunksStored++;
             }
         }

@@ -4,7 +4,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,6 +19,11 @@ import com.example.llmhost.api.ToolCallTrace;
 import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.config.AppProperties.ToolingProperties;
 import com.example.llmhost.config.SystemPromptProvider;
+import com.example.llmhost.model.UpgradeReport;
+import com.example.mcpmethodology.model.ChangeEffort;
+import com.example.mcpmethodology.model.ChangeInput;
+import com.example.mcpmethodology.model.EffortResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -31,6 +40,8 @@ public class ToolCallingChatService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallingChatService.class);
     private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*?\\}", Pattern.MULTILINE);
     private static final Pattern UPGRADE_PATTERN = Pattern.compile("\\bupgrade\\b", Pattern.CASE_INSENSITIVE);
+    private static final String REPAIR_SYSTEM_PROMPT = "Tu es un réparateur JSON. Retourne uniquement un JSON valide "
+            + "conforme au contrat UpgradeReport. Aucun texte hors JSON.";
 
     private final ChatClient chatClient;
     private final SystemPromptProvider systemPromptProvider;
@@ -38,15 +49,20 @@ public class ToolCallingChatService {
     private final List<ToolCallback> functionCallbacks;
     private final CallAdvisor loggingAdvisor;
     private final RagMultiPassUpgradeContext upgradeContextService;
+    private final ObjectMapper objectMapper;
+    private final MethodologyClient methodologyClient;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
-            List<ToolCallback> functionCallbacks, RagMultiPassUpgradeContext upgradeContextService) {
+            List<ToolCallback> functionCallbacks, RagMultiPassUpgradeContext upgradeContextService,
+            ObjectMapper objectMapper, MethodologyClient methodologyClient) {
         this.chatClient = chatClient;
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
         this.functionCallbacks = functionCallbacks;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
         this.upgradeContextService = upgradeContextService;
+        this.objectMapper = objectMapper;
+        this.methodologyClient = methodologyClient;
     }
 
     public ChatRunResponse run(ChatRequest request) {
@@ -66,10 +82,18 @@ public class ToolCallingChatService {
                         .toolCallbacks(callbacks)
                         .call()
                         .content();
-        String json = extractFirstJson(content);
+        ValidationResult validation = validateAndRepairReport(content);
+        UpgradeReport report = validation.report();
+        String json = validation.json();
+        String output = validation.content();
+        if (report != null) {
+            UpgradeReport updated = applyMethodologyWorkpoints(report);
+            json = writeReport(updated);
+            output = json;
+        }
 
         boolean toolsUsed = !guidedMode && shouldUseTools(request);
-        return new ChatRunResponse(content, json, traces, toolsUsed);
+        return new ChatRunResponse(output, json, traces, toolsUsed);
     }
 
     private boolean shouldUseTools(ChatRequest request) {
@@ -102,7 +126,7 @@ public class ToolCallingChatService {
                 request.repoUrl()
         );
         String systemPrompt = systemPromptProvider.buildGuidedUpgradePrompt();
-        String userPrompt = buildGuidedUserPrompt(request.prompt(), context.contextText());
+        String userPrompt = buildGuidedUserPrompt(request, context.contextText());
         return chatClient.prompt()
                 .system(systemPrompt)
                 .user(userPrompt)
@@ -124,11 +148,20 @@ public class ToolCallingChatService {
         }
     }
 
-    private String buildGuidedUserPrompt(String question, String contextText) {
-        if (!StringUtils.hasText(question)) {
-            return contextText;
+    private String buildGuidedUserPrompt(ChatRequest request, String contextText) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Réponds uniquement avec un JSON valide conforme au contrat UpgradeReport.\n");
+        builder.append(systemPromptProvider.upgradeReportContract()).append("\n");
+        builder.append("Project attendu: repoUrl=").append(request.repoUrl())
+                .append(", workspaceId=").append(request.workspaceId())
+                .append(", from=").append(request.fromVersion())
+                .append(", to=").append(request.toVersion())
+                .append("\n");
+        if (StringUtils.hasText(request.prompt())) {
+            builder.append("\nQUESTION:\n").append(request.prompt()).append("\n");
         }
-        return "QUESTION:\n" + question + "\n\n" + contextText;
+        builder.append("\n").append(contextText);
+        return builder.toString();
     }
 
     private List<ToolCallback> wrapCallbacks(List<ToolCallTrace> traces) {
@@ -145,6 +178,126 @@ public class ToolCallingChatService {
             return matcher.group();
         }
         return null;
+    }
+
+    private ValidationResult validateAndRepairReport(String content) {
+        String json = extractFirstJson(content);
+        UpgradeReport report = parseReport(json);
+        if (report != null) {
+            return new ValidationResult(content, json, report);
+        }
+        String repairedContent = requestJsonRepair(content);
+        String repairedJson = extractFirstJson(repairedContent);
+        UpgradeReport repairedReport = parseReport(repairedJson);
+        if (repairedReport != null) {
+            return new ValidationResult(repairedContent, repairedJson, repairedReport);
+        }
+        return new ValidationResult(content, json, null);
+    }
+
+    private UpgradeReport parseReport(String json) {
+        if (!StringUtils.hasText(json)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, UpgradeReport.class);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String requestJsonRepair(String content) {
+        String prompt = "Répare ce JSON afin qu'il soit valide et conforme au contrat UpgradeReport. "
+                + "Retourne uniquement le JSON corrigé.\n"
+                + systemPromptProvider.upgradeReportContract()
+                + "\nJSON/texte:\n" + content;
+        return chatClient.prompt()
+                .system(REPAIR_SYSTEM_PROMPT)
+                .user(prompt)
+                .advisors(loggingAdvisor)
+                .toolCallbacks(Collections.emptyList())
+                .call()
+                .content();
+    }
+
+    private UpgradeReport applyMethodologyWorkpoints(UpgradeReport report) {
+        List<UpgradeReport.Impact> impacts = report.getImpacts();
+        if (impacts == null || impacts.isEmpty()) {
+            return report;
+        }
+        List<ChangeInput> inputs = impacts.stream()
+                .map(this::toChangeInput)
+                .toList();
+        Optional<EffortResult> effortResult = methodologyClient.computeEffort(inputs);
+        if (effortResult.isEmpty()) {
+            return report;
+        }
+        Map<String, ChangeEffort> byId = new LinkedHashMap<>();
+        for (ChangeEffort effort : effortResult.get().getByChange()) {
+            if (effort.getChangeId() != null) {
+                byId.put(effort.getChangeId(), effort);
+            }
+        }
+        List<UpgradeReport.Workpoint> workpoints = new ArrayList<>();
+        for (UpgradeReport.Impact impact : impacts) {
+            if (impact == null || impact.getId() == null) {
+                continue;
+            }
+            ChangeEffort effort = byId.get(impact.getId());
+            if (effort == null) {
+                continue;
+            }
+            workpoints.add(new UpgradeReport.Workpoint(
+                    impact.getId(),
+                    effort.getWorkpoints(),
+                    effort.getReason(),
+                    impact.getEvidence()
+            ));
+        }
+        report.setWorkpoints(workpoints);
+        return report;
+    }
+
+    private ChangeInput toChangeInput(UpgradeReport.Impact impact) {
+        ChangeInput input = new ChangeInput();
+        input.setId(impact.getId());
+        input.setType(impact.getType());
+        input.setSeverity(mapSeverity(impact.getType()));
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (impact.getAffectedAreas() != null && !impact.getAffectedAreas().isEmpty()) {
+            metadata.put("impactedFiles", impact.getAffectedAreas().size());
+        }
+        if (impact.getEvidence() != null && !impact.getEvidence().isEmpty()) {
+            metadata.put("occurrences", impact.getEvidence().size());
+        }
+        if (!metadata.isEmpty()) {
+            input.setMetadata(metadata);
+        }
+        return input;
+    }
+
+    private String mapSeverity(String type) {
+        if (!StringUtils.hasText(type)) {
+            return null;
+        }
+        return switch (type.toUpperCase(Locale.ROOT)) {
+            case "BREAKING_CHANGE" -> "HIGH";
+            case "DEPRECATION" -> "LOW";
+            case "BEHAVIOR_CHANGE" -> "MEDIUM";
+            case "DEPENDENCY_UPGRADE" -> "MEDIUM";
+            default -> "MEDIUM";
+        };
+    }
+
+    private String writeReport(UpgradeReport report) {
+        try {
+            return objectMapper.writeValueAsString(report);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Impossible de sérialiser le UpgradeReport", ex);
+        }
+    }
+
+    private record ValidationResult(String content, String json, UpgradeReport report) {
     }
 
     private static class LoggingToolCallback implements ToolCallback {
