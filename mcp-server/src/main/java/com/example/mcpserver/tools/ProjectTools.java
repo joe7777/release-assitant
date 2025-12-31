@@ -20,6 +20,7 @@ import com.example.mcpserver.dto.ProjectSpringUsageScanResponse;
 import com.example.mcpserver.service.CodeIndexer;
 import com.example.mcpserver.service.MavenAnalyzerService;
 import com.example.mcpserver.service.ProjectSpringUsageScannerService;
+import com.example.mcpserver.service.WorkspaceCloneResult;
 import com.example.mcpserver.service.WorkspaceService;
 
 @Component
@@ -39,10 +40,10 @@ public class ProjectTools {
     }
 
     @Tool(name = "project.clone", description = "Clone un dépôt Git dans un workspace local")
-    public CloneResponse cloneRepository(String repoUrl, String branch, String authRef) throws GitAPIException, IOException {
-        String workspaceId = workspaceService.cloneRepository(repoUrl, branch, authRef);
-        Path path = workspaceService.resolveWorkspace(workspaceId);
-        return new CloneResponse(workspaceId, path.toString());
+    public CloneResponse cloneRepository(String repoUrl, String branch, String authRef, String workspaceId) throws GitAPIException, IOException {
+        WorkspaceCloneResult result = workspaceService.cloneRepository(repoUrl, branch, authRef, workspaceId);
+        return new CloneResponse(result.workspaceId(), result.repoUrl(), result.branch(), result.commitHash(),
+                result.localPath().toString());
     }
 
     @Tool(name = "project.analyzeMaven", description = "Analyse le pom.xml et les dépendances Maven")
