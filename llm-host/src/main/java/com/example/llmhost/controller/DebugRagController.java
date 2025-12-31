@@ -11,6 +11,8 @@ import com.example.llmhost.api.DebugRagSearchResponse;
 import com.example.llmhost.api.DebugRagWithSourcesRequest;
 import com.example.llmhost.api.DebugRagWithSourcesResponse;
 import com.example.llmhost.api.DebugToolsResponse;
+import com.example.llmhost.api.DebugUpgradeContextRequest;
+import com.example.llmhost.api.DebugUpgradeContextResponse;
 import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.config.SystemPromptProvider;
 import com.example.llmhost.rag.CitationValidator;
@@ -19,7 +21,9 @@ import com.example.llmhost.rag.CitationValidator.RetryDirective;
 import com.example.llmhost.rag.CitationValidator.RetryReason;
 import com.example.llmhost.rag.RagHit;
 import com.example.llmhost.rag.RagSearchClient;
+import com.example.llmhost.service.RagMultiPassUpgradeContext;
 import com.example.llmhost.service.RagContextBuilder;
+import com.example.llmhost.service.UpgradeContext;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,10 +54,11 @@ public class DebugRagController {
     private final RagSearchClient ragSearchClient;
     private final CitationValidator citationValidator;
     private final SystemPromptProvider systemPromptProvider;
+    private final RagMultiPassUpgradeContext upgradeContextService;
 
     public DebugRagController(List<ToolCallback> toolCallbacks, ChatClient chatClient, AppProperties appProperties,
             RagContextBuilder ragContextBuilder, RagSearchClient ragSearchClient, CitationValidator citationValidator,
-            SystemPromptProvider systemPromptProvider) {
+            SystemPromptProvider systemPromptProvider, RagMultiPassUpgradeContext upgradeContextService) {
         this.toolCallbacks = toolCallbacks;
         this.chatClient = chatClient;
         this.appProperties = appProperties;
@@ -62,6 +67,7 @@ public class DebugRagController {
         this.ragSearchClient = ragSearchClient;
         this.citationValidator = citationValidator;
         this.systemPromptProvider = systemPromptProvider;
+        this.upgradeContextService = upgradeContextService;
     }
 
     @GetMapping("/tools")
@@ -109,6 +115,17 @@ public class DebugRagController {
         int maxContextChars = resolveMaxContextChars(request.maxContextChars());
         DebugRagTestResponse.Llm llm = buildLlmResponse(true, request.question(), request.hits(), maxContextChars);
         return new DebugRagWithSourcesResponse(llm);
+    }
+
+    @PostMapping("/upgradeContext")
+    public DebugUpgradeContextResponse upgradeContext(@Valid @RequestBody DebugUpgradeContextRequest request) {
+        UpgradeContext context = upgradeContextService.retrieve(
+                request.fromVersion(),
+                request.toVersion(),
+                request.workspaceId(),
+                request.repoUrl()
+        );
+        return new DebugUpgradeContextResponse(context.hits(), context.contextText());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

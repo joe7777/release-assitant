@@ -52,4 +52,13 @@ public class SystemPromptProvider {
         }
         return joiner.toString();
     }
+
+    public String buildGuidedUpgradePrompt() {
+        StringJoiner joiner = new StringJoiner("\n");
+        joiner.add("Tu es un expert Spring Boot Upgrade Assistant.");
+        joiner.add("Tu ne dois parler que de ce qui est dans les sources [S#] et l’inventaire projet S1.");
+        joiner.add("Si un impact n’est pas justifié par une source, réponds NON TROUVÉ.");
+        joiner.add("Toujours citer [S#] à chaque point.");
+        return joiner.toString();
+    }
 }
