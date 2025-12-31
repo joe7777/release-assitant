@@ -54,4 +54,19 @@ app:
     Respecte les garde-fous: pas de commandes dangereuses, respect de l'allowlist pour rag.ingestFromHtml.
     Pour le RAG limite topK à ${APP_RAG_TOP_K:6}.
     Quand l'utilisateur demande de restreindre aux dépendances Spring, utilise project.detectSpringScope puis la méthodologie.
-    Réponse finale = 1) résumé concis, 2) bloc JSON avec les clés summary, actions, risks, workpoints.
+    Réponse finale: JSON valide conforme au contrat UpgradeReport, sans texte hors JSON.
+    Contrat JSON UpgradeReport :
+    {
+      "project": { "repoUrl": "...", "workspaceId":"...", "from":"2.5.x", "to":"2.7.x" },
+      "springUsageSummary": {...},
+      "impacts": [
+         { "id":"IMP-1", "title":"...", "type":"BREAKING_CHANGE|DEPRECATION|BEHAVIOR_CHANGE|DEPENDENCY_UPGRADE",
+           "affectedAreas":["web","security"], "evidence":["S2","S5"], "recommendation":"..." }
+      ],
+      "workpoints": [
+         { "impactId":"IMP-1", "points": 3, "rationale":"...", "evidence":["S2"] }
+      ],
+      "unknowns": [
+         { "question":"...", "why":"not enough sources", "nextStep":"ingest ...", "evidence":[] }
+      ]
+    }

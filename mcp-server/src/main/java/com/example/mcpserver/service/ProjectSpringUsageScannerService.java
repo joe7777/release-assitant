@@ -26,7 +26,6 @@ import org.eclipse.jgit.lib.StoredConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import com.example.mcpserver.dto.ProjectSpringUsageInventory;
@@ -68,15 +67,15 @@ public class ProjectSpringUsageScannerService {
     private final WorkspaceService workspaceService;
     private final HashingService hashingService;
     private final IngestionLedger ingestionLedger;
-    private final VectorStore vectorStore;
+    private final VectorStoreAddService vectorStoreAddService;
     private final ObjectMapper objectMapper;
 
     public ProjectSpringUsageScannerService(WorkspaceService workspaceService, HashingService hashingService,
-            IngestionLedger ingestionLedger, VectorStore vectorStore, ObjectMapper objectMapper) {
+            IngestionLedger ingestionLedger, VectorStoreAddService vectorStoreAddService, ObjectMapper objectMapper) {
         this.workspaceService = workspaceService;
         this.hashingService = hashingService;
         this.ingestionLedger = ingestionLedger;
-        this.vectorStore = vectorStore;
+        this.vectorStoreAddService = vectorStoreAddService;
         this.objectMapper = objectMapper;
     }
 
@@ -148,7 +147,7 @@ public class ProjectSpringUsageScannerService {
             metadata.put("repoUrl", gitInfo.repoUrl());
             metadata.put("commit", gitInfo.commit());
             metadata.put("documentKey", documentKey);
-            vectorStore.add(List.of(new Document(json, metadata)));
+            vectorStoreAddService.add(List.of(new Document(json, metadata)));
             ingestionLedger.record(documentHash);
         }
 

@@ -23,7 +23,6 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -45,7 +44,7 @@ public class RepoSourceIngestionService {
             ".bmp", ".ico", ".pdf", ".mp3", ".mp4", ".avi", ".mov", ".woff", ".woff2", ".ttf");
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("(?m)^\\s*package\\s+([\\w\\.]+)\\s*;?");
 
-    private final VectorStore vectorStore;
+    private final VectorStoreAddService vectorStoreAddService;
     private final HashingService hashingService;
     private final IngestionLedger ingestionLedger;
     private final Path cacheRoot;
@@ -59,12 +58,12 @@ public class RepoSourceIngestionService {
     private final Set<String> allowedSpringRepoUrls;
     private final Set<String> allowedProjectRepoUrls;
 
-    public RepoSourceIngestionService(VectorStore vectorStore, HashingService hashingService,
+    public RepoSourceIngestionService(VectorStoreAddService vectorStoreAddService, HashingService hashingService,
             IngestionLedger ingestionLedger,
             @Value("${mcp.spring-source.cache-root:spring-sources}") String cacheRoot,
-            @Value("${mcp.spring-source.default-max-files:6000}") int defaultMaxFiles,
-            @Value("${mcp.spring-source.default-max-file-bytes:300000}") int defaultMaxFileBytes,
-            @Value("${mcp.spring-source.default-max-lines-per-file:8000}") int defaultMaxLinesPerFile,
+            @Value("${mcp.spring-source.default-max-files:10000}") int defaultMaxFiles,
+            @Value("${mcp.spring-source.default-max-file-bytes:600000}") int defaultMaxFileBytes,
+            @Value("${mcp.spring-source.default-max-lines-per-file:20000}") int defaultMaxLinesPerFile,
             @Value("${mcp.rag.chunk-size:800}") int chunkSize,
             @Value("${mcp.rag.chunk-overlap:80}") int chunkOverlap,
             @Value("${mcp.rag.text-normalization:true}") boolean normalizeWhitespace,
@@ -74,7 +73,7 @@ public class RepoSourceIngestionService {
                     + "https://github.com/spring-projects/spring-boot}") List<String> allowedRepoUrls,
             @Value("${mcp.project-source.allowlist:}") List<String> projectRepoUrls)
             throws IOException {
-        this.vectorStore = vectorStore;
+        this.vectorStoreAddService = vectorStoreAddService;
         this.hashingService = hashingService;
         this.ingestionLedger = ingestionLedger;
         this.cacheRoot = Path.of(cacheRoot).toAbsolutePath();
@@ -266,7 +265,7 @@ public class RepoSourceIngestionService {
                     increment(skipReasons, allChunksDuplicate ? "DUPLICATE" : "EMPTY");
                     continue;
                 }
-                vectorStore.add(documents);
+                vectorStoreAddService.add(documents);
                 ingestionLedger.record(documentHash);
                 for (Document document : documents) {
                     Object chunkHash = document.getMetadata().get("chunkTextHash");

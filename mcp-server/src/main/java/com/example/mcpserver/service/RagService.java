@@ -36,6 +36,7 @@ public class RagService {
     private static final Logger logger = LoggerFactory.getLogger(RagService.class);
 
     private final VectorStore vectorStore;
+    private final VectorStoreAddService vectorStoreAddService;
     private final HashingService hashingService;
     private final HtmlTextExtractor htmlTextExtractor;
     private final IngestionLedger ingestionLedger;
@@ -48,8 +49,9 @@ public class RagService {
     private final int embeddingMaxRetries;
     private final long embeddingBackoffMs;
 
-    public RagService(VectorStore vectorStore, HashingService hashingService, HtmlTextExtractor htmlTextExtractor,
-            IngestionLedger ingestionLedger, @Value("${mcp.rag.max-content-length:5242880}") int maxContentLength,
+    public RagService(VectorStore vectorStore, VectorStoreAddService vectorStoreAddService,
+            HashingService hashingService, HtmlTextExtractor htmlTextExtractor, IngestionLedger ingestionLedger,
+            @Value("${mcp.rag.max-content-length:5242880}") int maxContentLength,
             @Value("${mcp.rag.chunk-size:800}") int chunkSize,
             @Value("${mcp.rag.chunk-overlap:80}") int chunkOverlap,
             @Value("${mcp.rag.embedding-batch-size:24}") int embeddingBatchSize,
@@ -57,6 +59,7 @@ public class RagService {
             @Value("${mcp.rag.embedding-backoff-ms:500}") long embeddingBackoffMs,
             @Value("${mcp.rag.allowlist:https://docs.spring.io,https://github.com}") List<String> allowlist) {
         this.vectorStore = vectorStore;
+        this.vectorStoreAddService = vectorStoreAddService;
         this.hashingService = hashingService;
         this.htmlTextExtractor = htmlTextExtractor;
         this.ingestionLedger = ingestionLedger;
@@ -237,7 +240,7 @@ public class RagService {
 
     private void addBatchWithRetry(List<Document> batch, IngestionResult result, int retriesLeft) {
         try {
-            vectorStore.add(batch);
+            vectorStoreAddService.add(batch);
             result.addStored(batch.size());
         } catch (RuntimeException ex) {
             if (!isReadTimeout(ex)) {

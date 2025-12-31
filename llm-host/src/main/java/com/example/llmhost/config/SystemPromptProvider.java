@@ -26,7 +26,8 @@ public class SystemPromptProvider {
         joiner.add("Si l'utilisateur demande de se limiter aux dépendances Spring, filtre via project.detectSpringScope avant de compter.");
         joiner.add("Pour le RAG, limite topK à " + properties.getSafety().getRagTopK() + " et résume de façon synthétique.");
         joiner.add("Ne divulgue pas de secrets et ne crée pas de commandes destructrices.");
-        joiner.add("Format de réponse :\n1/ bref rapport lisible.\n2/ un bloc JSON structuré (clé 'summary', 'actions', 'risks', 'workpoints').");
+        joiner.add("Format de réponse obligatoire: JSON valide conforme au contrat UpgradeReport, sans texte hors JSON.");
+        joiner.add(upgradeReportContract());
         joiner.add("Si DRY_RUN est actif, décris les étapes sans appeler les tools.");
         return joiner.toString();
     }
@@ -59,6 +60,28 @@ public class SystemPromptProvider {
         joiner.add("Tu ne dois parler que de ce qui est dans les sources [S#] et l’inventaire projet S1.");
         joiner.add("Si un impact n’est pas justifié par une source, réponds NON TROUVÉ.");
         joiner.add("Toujours citer [S#] à chaque point.");
+        joiner.add("Réponds uniquement avec un JSON valide conforme au contrat UpgradeReport, sans texte hors JSON.");
+        joiner.add(upgradeReportContract());
+        return joiner.toString();
+    }
+
+    public String upgradeReportContract() {
+        StringJoiner joiner = new StringJoiner("\n");
+        joiner.add("Contrat JSON UpgradeReport :");
+        joiner.add("{");
+        joiner.add("  \"project\": { \"repoUrl\": \"...\", \"workspaceId\":\"...\", \"from\":\"2.5.x\", \"to\":\"2.7.x\" },");
+        joiner.add("  \"springUsageSummary\": {...},");
+        joiner.add("  \"impacts\": [");
+        joiner.add("     { \"id\":\"IMP-1\", \"title\":\"...\", \"type\":\"BREAKING_CHANGE|DEPRECATION|BEHAVIOR_CHANGE|DEPENDENCY_UPGRADE\",");
+        joiner.add("       \"affectedAreas\":[\"web\",\"security\"], \"evidence\":[\"S2\",\"S5\"], \"recommendation\":\"...\" }");
+        joiner.add("  ],");
+        joiner.add("  \"workpoints\": [");
+        joiner.add("     { \"impactId\":\"IMP-1\", \"points\": 3, \"rationale\":\"...\", \"evidence\":[\"S2\"] }");
+        joiner.add("  ],");
+        joiner.add("  \"unknowns\": [");
+        joiner.add("     { \"question\":\"...\", \"why\":\"not enough sources\", \"nextStep\":\"ingest ...\", \"evidence\":[] }");
+        joiner.add("  ]");
+        joiner.add("}");
         return joiner.toString();
     }
 }
