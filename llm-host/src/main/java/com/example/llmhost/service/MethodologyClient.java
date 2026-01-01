@@ -1,8 +1,5 @@
 package com.example.llmhost.service;
 
-import com.example.mcpmethodology.model.ChangeInput;
-import com.example.mcpmethodology.model.ComputeEffortRequest;
-import com.example.mcpmethodology.model.EffortResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,7 +13,7 @@ import org.springframework.util.StringUtils;
 @Component
 public class MethodologyClient {
 
-    private static final String TOOL_NAME = "methodology.computeWorkpoints";
+    private static final String TOOL_NAME = "methodology.writeReport";
 
     private final List<ToolCallback> toolCallbacks;
     private final ObjectMapper objectMapper;
@@ -26,14 +23,17 @@ public class MethodologyClient {
         this.objectMapper = objectMapper;
     }
 
-    public Optional<EffortResult> computeEffort(List<ChangeInput> changes) {
+    public Optional<String> writeReport(String content) {
         Optional<ToolCallback> callback = findToolCallback(TOOL_NAME);
         if (callback.isEmpty()) {
             return Optional.empty();
         }
-        String payload = buildToolInput(changes);
+        String payload = buildToolInput(content);
         String response = callback.get().call(payload);
-        return parseResponse(response);
+        if (!StringUtils.hasText(response)) {
+            return Optional.empty();
+        }
+        return Optional.of(response);
     }
 
     private Optional<ToolCallback> findToolCallback(String name) {
@@ -42,24 +42,13 @@ public class MethodologyClient {
                 .findFirst();
     }
 
-    private String buildToolInput(List<ChangeInput> changes) {
+    private String buildToolInput(String content) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("changes", changes);
+        payload.put("content", content);
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (Exception ex) {
-            throw new IllegalStateException("Impossible de sérialiser la requête methodology.computeWorkpoints", ex);
-        }
-    }
-
-    private Optional<EffortResult> parseResponse(String response) {
-        if (!StringUtils.hasText(response)) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.ofNullable(objectMapper.readValue(response, EffortResult.class));
-        } catch (Exception ex) {
-            throw new IllegalStateException("Impossible de parser la réponse methodology.computeWorkpoints", ex);
+            throw new IllegalStateException("Impossible de sérialiser la requête methodology.writeReport", ex);
         }
     }
 

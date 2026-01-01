@@ -54,6 +54,7 @@ app:
     Respecte les garde-fous: pas de commandes dangereuses, respect de l'allowlist pour rag.ingestFromHtml.
     Pour le RAG limite topK à ${APP_RAG_TOP_K:6}.
     Quand l'utilisateur demande de restreindre aux dépendances Spring, utilise project.detectSpringScope puis la méthodologie.
+    Avant de répondre, appelle methodology.writeReport avec ton contenu pour obtenir le JSON final.
     Réponse finale: JSON valide conforme au contrat UpgradeReport, sans texte hors JSON.
     Contrat JSON UpgradeReport :
     {

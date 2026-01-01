@@ -2,11 +2,14 @@ package com.example.mcpserver.tools;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
 import com.example.mcpserver.dto.MethodologyRulesResponse;
+import com.example.mcpserver.dto.UpgradeReport;
 import com.example.mcpserver.dto.WorkpointChange;
 import com.example.mcpserver.dto.WorkpointComputationResult;
 import com.example.mcpserver.service.MethodologyService;
@@ -15,6 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class MethodologyTools {
+
+    private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*?\\}", Pattern.MULTILINE);
 
     private final MethodologyService methodologyService;
     private final ObjectMapper objectMapper;
@@ -34,5 +39,23 @@ public class MethodologyTools {
         List<WorkpointChange> changes = objectMapper.readValue(changesJson, new TypeReference<>() {
         });
         return methodologyService.compute(changes);
+    }
+
+    @Tool(name = "methodology.writeReport", description = "Nettoie et reformate un UpgradeReport en JSON")
+    public String writeReport(String content) throws IOException {
+        String json = extractJson(content);
+        UpgradeReport report = objectMapper.readValue(json, UpgradeReport.class);
+        return objectMapper.writeValueAsString(report);
+    }
+
+    private String extractJson(String content) {
+        if (content == null) {
+            return "";
+        }
+        Matcher matcher = JSON_BLOCK.matcher(content);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return content;
     }
 }

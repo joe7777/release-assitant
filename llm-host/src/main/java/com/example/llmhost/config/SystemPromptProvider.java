@@ -26,6 +26,7 @@ public class SystemPromptProvider {
         joiner.add("Si l'utilisateur demande de se limiter aux dépendances Spring, filtre via project.detectSpringScope avant de compter.");
         joiner.add("Pour le RAG, limite topK à " + properties.getSafety().getRagTopK() + " et résume de façon synthétique.");
         joiner.add("Ne divulgue pas de secrets et ne crée pas de commandes destructrices.");
+        joiner.add("Quand tu as terminé le rapport, appelle methodology.writeReport avec ton contenu pour obtenir le JSON final.");
         joiner.add("Format de réponse obligatoire: JSON valide conforme au contrat UpgradeReport, sans texte hors JSON.");
         joiner.add(upgradeReportContract());
         joiner.add("Si DRY_RUN est actif, décris les étapes sans appeler les tools.");
