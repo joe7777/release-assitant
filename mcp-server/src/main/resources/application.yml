@@ -72,6 +72,9 @@ mcp:
     baseline-do-ingest: ${RAG_BASELINE_DO_INGEST:false}
     text-normalization: true
   vector-add-timeout-ms: ${VECTOR_ADD_TIMEOUT_MS:90000}
+  vector-add-batch-size: ${VECTOR_ADD_BATCH_SIZE:24}
+  vector-add-max-retries: ${VECTOR_ADD_MAX_RETRIES:3}
+  vector-add-backoff-ms: ${VECTOR_ADD_BACKOFF_MS:500}
 
 ---
 spring:
