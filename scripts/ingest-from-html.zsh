@@ -223,19 +223,16 @@ function summarize_response() {
   local body="$2"
   local url="$3"
 
-  local documentKey ingested skipped chunks documentHash
-  documentKey=$(extract_json_value "$body" "documentKey" "")
+  local chunksStored chunksSkipped documentHash
   documentHash=$(extract_json_value "$body" "documentHash" "")
-  ingested=$(extract_json_value "$body" "ingested" "")
-  skipped=$(extract_json_value "$body" "skipped" "")
-  chunks=$(extract_json_value "$body" "chunksCreated" "")
+  chunksStored=$(extract_json_value "$body" "chunksStored" "")
+  chunksSkipped=$(extract_json_value "$body" "chunksSkipped" "")
 
   echo "---"
   echo "URL           : $url"
   echo "HTTP          : $http_code"
-  echo "documentKey   : ${documentKey:-<inconnu>}"
-  echo "ingested/skipped : ${ingested:-?}/${skipped:-?}"
-  echo "chunksCreated : ${chunks:-?}"
+  echo "chunksStored  : ${chunksStored:-?}"
+  echo "chunksSkipped : ${chunksSkipped:-?}"
   echo "documentHash  : ${documentHash:-<n/a>}"
 }
 
@@ -346,7 +343,7 @@ function main() {
   local line line_no=0 errors=0 processed=0
 
   while IFS= read -r line || [[ -n "$line" ]]; do
-    ((line_no++))
+    ((++line_no))
     if [[ -z "${line//[[:space:]]/}" ]]; then
       continue
     fi
@@ -355,7 +352,7 @@ function main() {
     fi
 
     if ! parse_csv_line "$line"; then
-      ((errors++))
+      ((++errors))
       log_line ERROR "Ligne $line_no ignorée (CSV invalide ou URL manquante)"
       if [[ "$FAIL_FAST" == "true" ]]; then
         echo "Arrêt en mode fail-fast (ligne $line_no)." >&2
@@ -372,9 +369,9 @@ function main() {
       log_line DEBUG "Sélecteurs de suppression: $selectors_remove"
     fi
     if post_ingest "$payload" "${CURRENT_LINE[url]}"; then
-      ((processed++))
+      ((++processed))
     else
-      ((errors++))
+      ((++errors))
       if [[ "$FAIL_FAST" == "true" ]]; then
         echo "Arrêt en mode fail-fast après échec ligne $line_no." >&2
         exit 1
