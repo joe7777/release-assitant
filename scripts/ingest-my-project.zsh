@@ -50,6 +50,7 @@ repo_url="${config[repoUrl]:-}"
 ref="${config[ref]:-main}"
 source_type="${config[sourceType]:-PROJECT_CODE}"
 project_key="${config[projectKey]:-}"
+workspace_id="${config[workspaceId]:-}"
 max_files="${config[maxFiles]:-}"
 
 if [[ -n "$MAX_FILES_OVERRIDE" ]]; then
@@ -64,11 +65,15 @@ fi
 if [[ -z "$project_key" ]]; then
   project_key=$(basename "$repo_url" .git)
 fi
+if [[ -z "$workspace_id" ]]; then
+  workspace_id="$project_key"
+fi
 
 escaped_repo_url=$(json_escape "$repo_url")
 escaped_ref=$(json_escape "$ref")
 escaped_project_key=$(json_escape "$project_key")
 escaped_source_type=$(json_escape "$source_type")
+escaped_workspace_id=$(json_escape "$workspace_id")
 
 max_files_json="null"
 if [[ -n "$max_files" ]]; then
@@ -102,4 +107,26 @@ fi
 curl -sS -X POST "$RAG_BASE_URL/api/rag/ingest/project" \
   -H 'Content-Type: application/json' \
   -d "$payload" | tee -a "$log_file"
+echo "" >> "$log_file"
+
+spring_payload=$(cat <<PAYLOAD
+{
+  "workspaceId": "$escaped_workspace_id",
+  "includeTests": false,
+  "maxFiles": $max_files_json,
+  "force": false
+}
+PAYLOAD
+)
+
+echo "Scan Spring usage workspace $workspace_id" | tee -a "$log_file"
+if [ "$DRY_RUN" = "true" ]; then
+  echo "Payload:" | tee -a "$log_file"
+  echo "$spring_payload" | tee -a "$log_file"
+  exit 0
+fi
+
+curl -sS -X POST "$RAG_BASE_URL/api/project/scanSpringUsage" \
+  -H 'Content-Type: application/json' \
+  -d "$spring_payload" | tee -a "$log_file"
 echo "" >> "$log_file"
