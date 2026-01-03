@@ -18,11 +18,16 @@ public class ProjectSourceIngestionService {
 
     private static final String DEFAULT_SOURCE_TYPE = "PROJECT_CODE";
     private static final String DOCUMENT_KEY_PREFIX = "PROJECT_SOURCE";
-    private static final List<String> DEFAULT_INCLUDE_GLOBS = List.of("**/*.java");
+    private static final List<String> DEFAULT_INCLUDE_GLOBS = List.of(
+            "**/*.java",
+            "**/*.properties",
+            "**/spring.factories",
+            "**/org.springframework.boot.autoconfigure.AutoConfiguration.imports");
     private static final List<String> DEFAULT_EXCLUDE_GLOBS = List.of(
             "**/src/test/**",
             "**/src/it/**",
             "**/src/integrationTest/**",
+            "**/test/**",
             "**/*Test.java",
             "**/*Tests.java",
             "**/target/**",
