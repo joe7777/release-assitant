@@ -22,7 +22,10 @@ public class SpringBootSourceIngestionService {
             List.of(
                     "spring-boot-project/spring-boot-autoconfigure/**",
                     "spring-boot-project/spring-boot-starters/**"),
-            List.of("**/*.java"),
+            List.of(
+                    "**/*.java",
+                    "**/src/main/resources/**",
+                    "**/pom.xml"),
             List.of(
                     "**/src/test/**",
                     "**/*Test.java",
@@ -41,6 +44,26 @@ public class SpringBootSourceIngestionService {
 
     public SpringSourceIngestionResponse ingestSpringBootSource(SpringSourceIngestionRequest request)
             throws IOException, GitAPIException {
-        return repoSourceIngestionService.ingest(request, SPRING_BOOT_CONFIG);
+        return repoSourceIngestionService.ingest(ensureDefaults(request), SPRING_BOOT_CONFIG);
+    }
+
+    private SpringSourceIngestionRequest ensureDefaults(SpringSourceIngestionRequest request) {
+        if (request.includeNonJava() != null) {
+            return request;
+        }
+        return new SpringSourceIngestionRequest(
+                request.version(),
+                request.modules(),
+                request.includeGlobs(),
+                request.excludeGlobs(),
+                request.includeTests(),
+                Boolean.TRUE,
+                request.maxFiles(),
+                request.maxFileBytes(),
+                request.maxLinesPerFile(),
+                request.force(),
+                request.chunkSize(),
+                request.chunkOverlap(),
+                request.includeKotlin());
     }
 }
