@@ -15,6 +15,7 @@ import com.example.mcpserver.dto.RagIngestionResponse;
 import com.example.mcpserver.dto.RagSearchResult;
 import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
+import com.example.mcpserver.service.RagLookupService;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
 import com.example.mcpserver.service.SpringBootSourceIngestionService;
@@ -26,15 +27,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class RagTools {
 
     private final RagService ragService;
+    private final RagLookupService ragLookupService;
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
     private final SpringBootSourceIngestionService springBootSourceIngestionService;
     private final ObjectMapper objectMapper;
 
-    public RagTools(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
-            SpringApiChangeService springApiChangeService,
+    public RagTools(RagService ragService, RagLookupService ragLookupService,
+            SpringSourceIngestionService springSourceIngestionService, SpringApiChangeService springApiChangeService,
             SpringBootSourceIngestionService springBootSourceIngestionService, ObjectMapper objectMapper) {
         this.ragService = ragService;
+        this.ragLookupService = ragLookupService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
         this.springBootSourceIngestionService = springBootSourceIngestionService;
@@ -63,6 +66,16 @@ public class RagTools {
             return objectMapper.writeValueAsString(normalized);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Impossible de sérialiser les résultats rag.search", ex);
+        }
+    }
+
+    @Tool(name = "rag.lookup", description = "Recherche déterministe dans Qdrant via filtres")
+    public String lookup(Map<String, Object> filters, int limit) {
+        List<RagSearchResult> results = ragLookupService.lookup(filters, limit);
+        try {
+            return objectMapper.writeValueAsString(results);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Impossible de sérialiser les résultats rag.lookup", ex);
         }
     }
 

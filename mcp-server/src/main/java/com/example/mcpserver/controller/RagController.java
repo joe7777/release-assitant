@@ -19,6 +19,7 @@ import com.example.mcpserver.dto.RagSearchResult;
 import com.example.mcpserver.dto.SpringSourceIngestionRequest;
 import com.example.mcpserver.dto.SpringSourceIngestionResponse;
 import com.example.mcpserver.service.ProjectSourceIngestionService;
+import com.example.mcpserver.service.RagLookupService;
 import com.example.mcpserver.service.RagService;
 import com.example.mcpserver.service.SpringApiChangeService;
 import com.example.mcpserver.service.SpringBootSourceIngestionService;
@@ -29,16 +30,18 @@ import com.example.mcpserver.service.SpringSourceIngestionService;
 public class RagController {
 
     private final RagService ragService;
+    private final RagLookupService ragLookupService;
     private final SpringSourceIngestionService springSourceIngestionService;
     private final SpringApiChangeService springApiChangeService;
     private final SpringBootSourceIngestionService springBootSourceIngestionService;
     private final ProjectSourceIngestionService projectSourceIngestionService;
 
-    public RagController(RagService ragService, SpringSourceIngestionService springSourceIngestionService,
-            SpringApiChangeService springApiChangeService,
+    public RagController(RagService ragService, RagLookupService ragLookupService,
+            SpringSourceIngestionService springSourceIngestionService, SpringApiChangeService springApiChangeService,
             SpringBootSourceIngestionService springBootSourceIngestionService,
             ProjectSourceIngestionService projectSourceIngestionService) {
         this.ragService = ragService;
+        this.ragLookupService = ragLookupService;
         this.springSourceIngestionService = springSourceIngestionService;
         this.springApiChangeService = springApiChangeService;
         this.springBootSourceIngestionService = springBootSourceIngestionService;
@@ -95,6 +98,17 @@ public class RagController {
                     int topK = ((Number) payload.getOrDefault("topK", 5)).intValue();
                     Map<String, Object> filters = (Map<String, Object>) payload.getOrDefault("filters", Map.of());
                     return ragService.search(query, filters, topK);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
+    }
+
+    @PostMapping("/lookup")
+    public Mono<ResponseEntity<List<RagSearchResult>>> lookup(@RequestBody Map<String, Object> payload) {
+        return Mono.fromCallable(() -> {
+                    int limit = ((Number) payload.getOrDefault("limit", 20)).intValue();
+                    Map<String, Object> filters = (Map<String, Object>) payload.getOrDefault("filters", Map.of());
+                    return ragLookupService.lookup(filters, limit);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
