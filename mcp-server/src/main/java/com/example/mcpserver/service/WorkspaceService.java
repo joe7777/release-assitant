@@ -61,6 +61,23 @@ public class WorkspaceService {
         }
         Path target = resolveWorkspace(resolvedWorkspaceId);
         Files.createDirectories(target);
+        if (Files.exists(target.resolve(".git"))) {
+            logger.info("Workspace {} already exists at {}", resolvedWorkspaceId, target);
+            try (Git git = Git.open(target.toFile())) {
+                if (branch != null && !branch.isBlank()) {
+                    var fetch = git.fetch().setRemote("origin");
+                    if (authRef != null && !authRef.isBlank()) {
+                        fetch.setCredentialsProvider(new UsernamePasswordCredentialsProvider(authRef, ""));
+                    }
+                    fetch.call();
+                    git.checkout().setName(branch).setForced(true).call();
+                }
+                ObjectId head = git.getRepository().resolve("HEAD");
+                String commitHash = head != null ? head.getName() : null;
+                String resolvedBranch = git.getRepository().getBranch();
+                return new WorkspaceCloneResult(resolvedWorkspaceId, repoUrl, resolvedBranch, commitHash, target);
+            }
+        }
 
         CloneCommand clone = Git.cloneRepository().setURI(repoUrl).setDirectory(target.toFile());
         if (branch != null && !branch.isBlank()) {
