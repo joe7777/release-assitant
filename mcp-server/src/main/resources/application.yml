@@ -52,6 +52,8 @@ springdoc:
 
 mcp:
   workspace-root: ${MCP_WORKSPACE_ROOT:workspaces}
+  qdrant:
+    http-port: ${QDRANT_HTTP_PORT:6333}
   spring-source:
     cache-root: ${MCP_SPRING_CACHE_ROOT:spring-sources}
     default-max-files: ${SPRING_SOURCE_MAX_FILES:10000}
@@ -85,7 +87,7 @@ spring:
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:vector-db}
-        port: ${QDRANT_PORT:6333}
+        port: ${QDRANT_GRPC_PORT:6334}
         collection-name: mcp_documents
         api-key: ${QDRANT_API_KEY:}
         initialize-schema: true

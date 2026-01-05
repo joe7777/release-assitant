@@ -17,7 +17,7 @@ public class QdrantScrollClient {
 
     public QdrantScrollClient(
             @Value("${spring.ai.vectorstore.qdrant.host:localhost}") String host,
-            @Value("${spring.ai.vectorstore.qdrant.port:6333}") int port,
+            @Value("${mcp.qdrant.http-port:6333}") int port,
             @Value("${spring.ai.vectorstore.qdrant.api-key:}") String apiKey,
             @Value("${mcp.rag.collection:mcp_documents}") String collection) {
         String baseUrl = "http://" + host + ":" + port;
