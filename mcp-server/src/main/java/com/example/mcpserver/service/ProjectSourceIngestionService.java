@@ -37,9 +37,12 @@ public class ProjectSourceIngestionService {
             "**/module-info.java");
 
     private final RepoSourceIngestionService repoSourceIngestionService;
+    private final WorkspaceService workspaceService;
 
-    public ProjectSourceIngestionService(RepoSourceIngestionService repoSourceIngestionService) {
+    public ProjectSourceIngestionService(RepoSourceIngestionService repoSourceIngestionService,
+            WorkspaceService workspaceService) {
         this.repoSourceIngestionService = repoSourceIngestionService;
+        this.workspaceService = workspaceService;
     }
 
     public ProjectSourceIngestionResponse ingestProject(ProjectSourceIngestionRequest request)
@@ -67,6 +70,8 @@ public class ProjectSourceIngestionService {
                 List.of(),
                 DEFAULT_INCLUDE_GLOBS,
                 DEFAULT_EXCLUDE_GLOBS);
+
+        workspaceService.cloneRepository(request.repoUrl(), request.ref(), null, request.projectKey());
 
         SpringSourceIngestionRequest sourceRequest = new SpringSourceIngestionRequest(
                 request.ref(),
