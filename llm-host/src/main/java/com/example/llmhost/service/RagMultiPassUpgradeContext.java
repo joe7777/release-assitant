@@ -6,21 +6,24 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.llmhost.rag.RagHit;
+import com.example.llmhost.rag.RagLookupClient;
 import com.example.llmhost.rag.RagSearchClient;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RagMultiPassUpgradeContext {
 
-    private static final int PROJECT_FACT_TOP_K = 1;
     private static final int RELEASE_NOTES_TOP_K = 5;
     private static final int MAX_HITS = 10;
 
     private final RagSearchClient ragSearchClient;
+    private final RagLookupClient ragLookupClient;
     private final RagContextBuilder ragContextBuilder;
 
-    public RagMultiPassUpgradeContext(RagSearchClient ragSearchClient, RagContextBuilder ragContextBuilder) {
+    public RagMultiPassUpgradeContext(RagSearchClient ragSearchClient, RagLookupClient ragLookupClient,
+            RagContextBuilder ragContextBuilder) {
         this.ragSearchClient = ragSearchClient;
+        this.ragLookupClient = ragLookupClient;
         this.ragContextBuilder = ragContextBuilder;
     }
 
@@ -35,11 +38,15 @@ public class RagMultiPassUpgradeContext {
     }
 
     private List<RagHit> retrieveProjectFacts(String workspaceId) {
-        String query = "spring usage inventory workspaceId=" + workspaceId;
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("sourceType", "PROJECT_FACT");
         filters.put("workspaceId", workspaceId);
-        return ragSearchClient.search(query, filters, PROJECT_FACT_TOP_K);
+        filters.put("docKind", "PROJECT_FACT");
+        List<RagHit> hits = ragLookupClient.lookup(filters, 5);
+        if (hits.isEmpty()) {
+            return List.of();
+        }
+        return List.of(hits.getFirst());
     }
 
     private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion) {
