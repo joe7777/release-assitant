@@ -25,6 +25,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
@@ -69,14 +70,20 @@ public class ProjectSpringUsageScannerService {
     private final IngestionLedger ingestionLedger;
     private final VectorStoreAddService vectorStoreAddService;
     private final ObjectMapper objectMapper;
+    private final int chunkSize;
+    private final int chunkOverlap;
 
     public ProjectSpringUsageScannerService(WorkspaceService workspaceService, HashingService hashingService,
-            IngestionLedger ingestionLedger, VectorStoreAddService vectorStoreAddService, ObjectMapper objectMapper) {
+            IngestionLedger ingestionLedger, VectorStoreAddService vectorStoreAddService, ObjectMapper objectMapper,
+            @Value("${mcp.rag.chunk-size:800}") int chunkSize,
+            @Value("${mcp.rag.chunk-overlap:80}") int chunkOverlap) {
         this.workspaceService = workspaceService;
         this.hashingService = hashingService;
         this.ingestionLedger = ingestionLedger;
         this.vectorStoreAddService = vectorStoreAddService;
         this.objectMapper = objectMapper;
+        this.chunkSize = Math.max(1, chunkSize);
+        this.chunkOverlap = Math.max(0, chunkOverlap);
     }
 
     public ProjectSpringUsageScanResponse scanSpringUsage(ProjectSpringUsageScanRequest request) throws IOException {
@@ -147,7 +154,18 @@ public class ProjectSpringUsageScannerService {
             metadata.put("repoUrl", gitInfo.repoUrl());
             metadata.put("commit", gitInfo.commit());
             metadata.put("documentKey", documentKey);
-            vectorStoreAddService.add(List.of(new Document(json, metadata)));
+            List<Document> documents = new ArrayList<>();
+            int index = 0;
+            for (String chunk : chunk(json, chunkSize, chunkOverlap)) {
+                Map<String, Object> chunkMetadata = new HashMap<>(metadata);
+                chunkMetadata.put("chunkIndex", index++);
+                chunkMetadata.put("chunkHash", hashingService.sha256(documentHash + chunk));
+                documents.add(new Document(chunk, chunkMetadata));
+            }
+            if (documents.isEmpty()) {
+                documents.add(new Document(json, metadata));
+            }
+            vectorStoreAddService.add(documents);
             ingestionLedger.record(documentHash);
         }
 
@@ -218,8 +236,24 @@ public class ProjectSpringUsageScannerService {
                             fileSpringImports.add(importName);
                             fileScore++;
                         }
-                    }
-                }
+        }
+    }
+
+    private List<String> chunk(String content, int chunkSize, int overlap) {
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        List<String> chunks = new ArrayList<>();
+        int step = Math.max(1, chunkSize - overlap);
+        for (int start = 0; start < content.length(); start += step) {
+            int end = Math.min(content.length(), start + chunkSize);
+            chunks.add(content.substring(start, end));
+            if (end >= content.length()) {
+                break;
+            }
+        }
+        return chunks;
+    }
 
                 Matcher annotationMatcher = ANNOTATION_PATTERN.matcher(content);
                 while (annotationMatcher.find()) {
