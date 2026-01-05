@@ -8,13 +8,17 @@ import java.util.Map;
 import com.example.llmhost.rag.RagHit;
 import com.example.llmhost.rag.RagLookupClient;
 import com.example.llmhost.rag.RagSearchClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RagMultiPassUpgradeContext {
 
+    private static final Logger logger = LoggerFactory.getLogger(RagMultiPassUpgradeContext.class);
     private static final int RELEASE_NOTES_TOP_K = 5;
     private static final int MAX_HITS = 10;
+    private static final int PROJECT_FACT_TOP_K = 3;
 
     private final RagSearchClient ragSearchClient;
     private final RagLookupClient ragLookupClient;
@@ -42,11 +46,29 @@ public class RagMultiPassUpgradeContext {
         filters.put("sourceType", "PROJECT_FACT");
         filters.put("workspaceId", workspaceId);
         filters.put("docKind", "PROJECT_FACT");
-        List<RagHit> hits = ragLookupClient.lookup(filters, 5);
+        List<RagHit> hits = ragLookupClient.lookup(filters, PROJECT_FACT_TOP_K);
         if (hits.isEmpty()) {
+            logger.info("Aucun PROJECT_FACT retourné pour workspaceId={}", workspaceId);
             return List.of();
         }
-        return List.of(hits.getFirst());
+        RagHit selected = selectProjectFact(hits);
+        return selected == null ? List.of() : List.of(selected);
+    }
+
+    private RagHit selectProjectFact(List<RagHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return null;
+        }
+        for (RagHit hit : hits) {
+            if (hit == null || hit.metadata() == null) {
+                continue;
+            }
+            Object documentKey = hit.metadata().get("documentKey");
+            if (documentKey != null && documentKey.toString().contains("/spring-usage-inventory")) {
+                return hit;
+            }
+        }
+        return hits.getFirst();
     }
 
     private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion) {
