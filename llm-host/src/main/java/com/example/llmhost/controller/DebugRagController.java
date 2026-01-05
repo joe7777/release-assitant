@@ -4,6 +4,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.example.llmhost.api.DebugProjectFactsRequest;
+import com.example.llmhost.api.DebugProjectFactsResponse;
 import com.example.llmhost.api.DebugRagTestRequest;
 import com.example.llmhost.api.DebugRagTestResponse;
 import com.example.llmhost.api.DebugRagSearchRequest;
@@ -20,6 +22,7 @@ import com.example.llmhost.rag.CitationValidator.CitationValidationResult;
 import com.example.llmhost.rag.CitationValidator.RetryDirective;
 import com.example.llmhost.rag.CitationValidator.RetryReason;
 import com.example.llmhost.rag.RagHit;
+import com.example.llmhost.rag.RagLookupClient;
 import com.example.llmhost.rag.RagSearchClient;
 import com.example.llmhost.service.RagMultiPassUpgradeContext;
 import com.example.llmhost.service.RagContextBuilder;
@@ -52,19 +55,22 @@ public class DebugRagController {
     private final SimpleLoggerAdvisor loggingAdvisor;
     private final RagContextBuilder ragContextBuilder;
     private final RagSearchClient ragSearchClient;
+    private final RagLookupClient ragLookupClient;
     private final CitationValidator citationValidator;
     private final SystemPromptProvider systemPromptProvider;
     private final RagMultiPassUpgradeContext upgradeContextService;
 
     public DebugRagController(List<ToolCallback> toolCallbacks, ChatClient chatClient, AppProperties appProperties,
-            RagContextBuilder ragContextBuilder, RagSearchClient ragSearchClient, CitationValidator citationValidator,
-            SystemPromptProvider systemPromptProvider, RagMultiPassUpgradeContext upgradeContextService) {
+            RagContextBuilder ragContextBuilder, RagSearchClient ragSearchClient, RagLookupClient ragLookupClient,
+            CitationValidator citationValidator, SystemPromptProvider systemPromptProvider,
+            RagMultiPassUpgradeContext upgradeContextService) {
         this.toolCallbacks = toolCallbacks;
         this.chatClient = chatClient;
         this.appProperties = appProperties;
         this.loggingAdvisor = new SimpleLoggerAdvisor();
         this.ragContextBuilder = ragContextBuilder;
         this.ragSearchClient = ragSearchClient;
+        this.ragLookupClient = ragLookupClient;
         this.citationValidator = citationValidator;
         this.systemPromptProvider = systemPromptProvider;
         this.upgradeContextService = upgradeContextService;
@@ -126,6 +132,17 @@ public class DebugRagController {
                 request.repoUrl()
         );
         return new DebugUpgradeContextResponse(context.hits(), context.contextText());
+    }
+
+    @PostMapping("/projectFacts")
+    public DebugProjectFactsResponse projectFacts(@Valid @RequestBody DebugProjectFactsRequest request) {
+        Map<String, Object> filters = new java.util.LinkedHashMap<>();
+        filters.put("sourceType", "PROJECT_FACT");
+        filters.put("workspaceId", request.workspaceId());
+        filters.put("docKind", "PROJECT_FACT");
+        List<RagHit> hits = ragLookupClient.lookup(filters, 5);
+        String contextText = ragContextBuilder.buildContext(hits, 6000);
+        return new DebugProjectFactsResponse(hits, contextText);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
