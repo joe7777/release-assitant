@@ -236,24 +236,8 @@ public class ProjectSpringUsageScannerService {
                             fileSpringImports.add(importName);
                             fileScore++;
                         }
-        }
-    }
-
-    private List<String> chunk(String content, int chunkSize, int overlap) {
-        if (content == null || content.isBlank()) {
-            return List.of();
-        }
-        List<String> chunks = new ArrayList<>();
-        int step = Math.max(1, chunkSize - overlap);
-        for (int start = 0; start < content.length(); start += step) {
-            int end = Math.min(content.length(), start + chunkSize);
-            chunks.add(content.substring(start, end));
-            if (end >= content.length()) {
-                break;
-            }
-        }
-        return chunks;
-    }
+                    }
+                }
 
                 Matcher annotationMatcher = ANNOTATION_PATTERN.matcher(content);
                 while (annotationMatcher.find()) {
@@ -277,6 +261,22 @@ public class ProjectSpringUsageScannerService {
 
         return new ScanAggregation(filesScanned, javaFilesParsed, importsCount, springImportsCount, annotationsCount,
                 importCounts, springImports, annotations, packages, files);
+    }
+
+    private List<String> chunk(String content, int chunkSize, int overlap) {
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        List<String> chunks = new ArrayList<>();
+        int step = Math.max(1, chunkSize - overlap);
+        for (int start = 0; start < content.length(); start += step) {
+            int end = Math.min(content.length(), start + chunkSize);
+            chunks.add(content.substring(start, end));
+            if (end >= content.length()) {
+                break;
+            }
+        }
+        return chunks;
     }
 
     private StarterDetection detectStartersAndVersion(Path workspace, int maxFileBytes) throws IOException {
