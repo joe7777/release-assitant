@@ -93,7 +93,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: qdrant
       QDRANT_HOST: vector-db
-      QDRANT_PORT: 6334
+      QDRANT_PORT: 6333
       MCP_WORKSPACE_ROOT: /workspaces
       MCP_SPRING_CACHE_ROOT: /spring-cache
       RAG_MAX_CONTENT_LENGTH: 1048576

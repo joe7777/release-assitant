@@ -14,7 +14,7 @@ WORKDIR /app
 
 ENV SPRING_PROFILES_ACTIVE=default \
     QDRANT_HOST=vector-db \
-    QDRANT_PORT=6334 \
+    QDRANT_PORT=6333 \
     MCP_WORKSPACE_ROOT=/workspaces
 
 COPY --from=builder /workspace/app/target/*.jar /app/app.jar
