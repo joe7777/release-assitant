@@ -23,7 +23,9 @@ public class RagMultiPassUpgradeContext {
     private static final Logger logger = LoggerFactory.getLogger(RagMultiPassUpgradeContext.class);
     private static final int RELEASE_NOTES_TOP_K = 5;
     private static final int MAX_HITS = 10;
-    private static final int PROJECT_FACT_TOP_K = 3;
+    private static final int PROJECT_FACT_TOP_K = 5;
+    private static final int MAX_PROJECT_FACT_CHARS = 1500;
+    private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
 
     private final RagSearchClient ragSearchClient;
@@ -50,7 +52,7 @@ public class RagMultiPassUpgradeContext {
                 : List.of();
 
         List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits, sourceCodeHits);
-        String contextText = ragContextBuilder.buildContext(merged, 6000);
+        String contextText = ragContextBuilder.buildContext(merged, 6000, MAX_PROJECT_FACT_CHARS);
         return new UpgradeContext(merged, contextText);
     }
 
@@ -60,28 +62,12 @@ public class RagMultiPassUpgradeContext {
         filters.put("workspaceId", workspaceId);
         filters.put("docKind", "PROJECT_FACT");
         List<RagHit> hits = ragLookupClient.lookup(filters, PROJECT_FACT_TOP_K);
+        logger.debug("PROJECT_FACT hits retrieved={} for workspaceId={}", hits == null ? 0 : hits.size(), workspaceId);
         if (hits.isEmpty()) {
             logger.info("Aucun PROJECT_FACT retourné pour workspaceId={}", workspaceId);
             return List.of();
         }
-        RagHit selected = selectProjectFact(hits);
-        return selected == null ? List.of() : List.of(selected);
-    }
-
-    private RagHit selectProjectFact(List<RagHit> hits) {
-        if (hits == null || hits.isEmpty()) {
-            return null;
-        }
-        for (RagHit hit : hits) {
-            if (hit == null || hit.metadata() == null) {
-                continue;
-            }
-            Object documentKey = hit.metadata().get("documentKey");
-            if (documentKey != null && documentKey.toString().contains("/spring-usage-inventory")) {
-                return hit;
-            }
-        }
-        return hits.getFirst();
+        return hits;
     }
 
     private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion) {
@@ -189,14 +175,28 @@ public class RagMultiPassUpgradeContext {
     private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> migrationHits,
             List<RagHit> deprecationHits, List<RagHit> sourceCodeHits) {
         List<RagHit> merged = new ArrayList<>();
-        if (projectFacts != null && !projectFacts.isEmpty()) {
-            merged.add(projectFacts.getFirst());
-        }
         Map<String, RagHit> unique = new LinkedHashMap<>();
-        appendUnique(unique, migrationHits);
-        appendUnique(unique, deprecationHits);
-        appendUnique(unique, sourceCodeHits);
-        for (RagHit hit : unique.values()) {
+        if (projectFacts != null && !projectFacts.isEmpty()) {
+            int projectFactLimit = Math.min(projectFacts.size(), MAX_PROJECT_FACT_CHUNKS);
+            for (int i = 0; i < projectFactLimit; i++) {
+                RagHit hit = projectFacts.get(i);
+                String dedupeKey = buildDedupeKey(hit);
+                if (!unique.containsKey(dedupeKey)) {
+                    unique.put(dedupeKey, hit);
+                    merged.add(hit);
+                }
+            }
+        }
+        Map<String, RagHit> remaining = new LinkedHashMap<>();
+        appendUnique(remaining, migrationHits);
+        appendUnique(remaining, deprecationHits);
+        appendUnique(remaining, sourceCodeHits);
+        for (RagHit hit : remaining.values()) {
+            String dedupeKey = buildDedupeKey(hit);
+            if (unique.containsKey(dedupeKey)) {
+                continue;
+            }
+            unique.put(dedupeKey, hit);
             if (merged.size() >= MAX_HITS) {
                 break;
             }
