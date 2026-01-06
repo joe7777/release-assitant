@@ -77,7 +77,7 @@ public class RagService {
     }
 
     public RagIngestionResponse ingestFromHtml(String url, String sourceType, String library, String version,
-            String docId, List<String> selectors) throws IOException {
+            String docId, String docKind, List<String> selectors) throws IOException {
         validateUrl(url);
         FetchResult fetchResult;
         try {
@@ -88,7 +88,7 @@ public class RagService {
         SelectorConfig selectorConfig = SelectorConfig.from(selectors);
         String text = htmlTextExtractor.extract(fetchResult.html(), selectorConfig.contentCss(),
                 selectorConfig.removeCss());
-        RagIngestionResponse response = ingestText(sourceType, library, version, text, url, docId);
+        RagIngestionResponse response = ingestText(sourceType, library, version, text, url, docId, docKind);
         if (fetchResult.truncated()) {
             List<String> warnings = new ArrayList<>(response.warnings());
             warnings.add("content-truncated");
@@ -99,17 +99,19 @@ public class RagService {
     }
 
     public RagIngestionResponse ingestText(String sourceType, String library, String version, String content, String url,
-            String docId) {
+            String docId, String docKind) {
         if (content.getBytes(StandardCharsets.UTF_8).length > maxContentLength) {
             return new RagIngestionResponse("", 0, 0, List.of("content-too-large"));
         }
+        String resolvedDocKind = resolveDocKind(sourceType, docKind);
         String documentKey = docId != null && !docId.isBlank() ? docId : url;
         String documentHash = hashingService.sha256(sourceType + library + version + content);
         if (ingestionLedger.alreadyIngested(documentHash)) {
             return new RagIngestionResponse(documentHash, 0, 1, List.of("duplicate"));
         }
 
-        List<Document> docs = splitToDocuments(content, documentHash, documentKey, sourceType, library, version, url);
+        List<Document> docs = splitToDocuments(content, documentHash, documentKey, sourceType, library, version, url,
+                resolvedDocKind);
         IngestionResult ingestionResult = addDocumentsWithRetries(docs);
         if (ingestionResult.chunksSkipped() == 0) {
             ingestionLedger.record(documentHash);
@@ -200,7 +202,7 @@ public class RagService {
     }
 
     private List<Document> splitToDocuments(String content, String docHash, String documentKey, String sourceType,
-            String library, String version, String url) {
+            String library, String version, String url, String docKind) {
         List<Document> docs = new ArrayList<>();
         int step = Math.max(1, chunkSize - chunkOverlap);
         int start = 0;
@@ -217,6 +219,7 @@ public class RagService {
             metadata.put("library", library);
             metadata.put("version", version);
             metadata.put("url", url);
+            metadata.put("docKind", docKind);
             docs.add(new Document(chunk, metadata));
             if (end >= content.length()) {
                 break;
@@ -224,6 +227,16 @@ public class RagService {
             start = Math.min(content.length(), start + step);
         }
         return docs;
+    }
+
+    private String resolveDocKind(String sourceType, String docKind) {
+        if (docKind != null && !docKind.isBlank()) {
+            return docKind;
+        }
+        if ("SPRING_RELEASE_NOTE".equalsIgnoreCase(sourceType)) {
+            return "RELEASE_NOTES";
+        }
+        return "DOC";
     }
 
     private IngestionResult addDocumentsWithRetries(List<Document> docs) {
