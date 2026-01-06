@@ -339,6 +339,9 @@ public class RagService {
         if (filterValue instanceof Collection<?> filterCollection) {
             return matchesCollectionFilter(docValue, filterCollection);
         }
+        if (docValue instanceof Collection<?> docCollection) {
+            return docCollection.contains(filterValue);
+        }
         return Objects.equals(docValue, filterValue);
     }
 
