@@ -15,9 +15,28 @@ fi
 timestamp=$(date +%Y%m%d-%H%M%S)
 log_file="$LOG_DIR/ingest-${timestamp}.log"
 
-while IFS=';' read -r sourceType library version url docId _ _; do
+while IFS= read -r line || [[ -n "$line" ]]; do
+  fields=("${(@s:;:)line}")
+  sourceType=${fields[1]-""}
+  library=${fields[2]-""}
+  version=${fields[3]-""}
+  url=${fields[4]-""}
+  docId=${fields[5]-""}
+  if (( ${#fields[@]} >= 8 )); then
+    docKind=${fields[6]-""}
+  else
+    docKind=""
+  fi
+
   if [[ -z "$sourceType" ]] || [[ "$sourceType" = "sourceType" ]] || [[ "$sourceType" == \#* ]]; then
     continue
+  fi
+  if [[ -z "$docKind" ]]; then
+    if [[ "$sourceType" == "SPRING_RELEASE_NOTE" ]]; then
+      docKind="RELEASE_NOTES"
+    else
+      docKind="DOC"
+    fi
   fi
   payload=$(cat <<PAYLOAD
 {
@@ -25,7 +44,8 @@ while IFS=';' read -r sourceType library version url docId _ _; do
   "library": "$library",
   "version": "$version",
   "url": "$url",
-  "docId": "$docId"
+  "docId": "$docId",
+  "docKind": "$docKind"
 }
 PAYLOAD
 )

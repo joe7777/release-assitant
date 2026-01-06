@@ -18,7 +18,8 @@ DEFAULT_LIBRARY=${DEFAULT_LIBRARY:-"spring-boot"}
 DEFAULT_VERSION=${DEFAULT_VERSION:-"latest"}
 SELECTOR_CONTENT_CSS=${SELECTOR_CONTENT_CSS:-""}
 SELECTOR_REMOVE_CSS=${SELECTOR_REMOVE_CSS:-""}
-# Fichier CSV (séparateur ;) avec les colonnes : sourceType;library;version;url;docId;contentCss;removeCss
+# Fichier CSV (séparateur ;) avec les colonnes : sourceType;library;version;url;docId;docKind;contentCss;removeCss
+# docKind par défaut : RELEASE_NOTES pour SPRING_RELEASE_NOTE, sinon DOC.
 SOURCES_FILE=${SOURCES_FILE:-"rag_sources/sources.csv"}
 LOG_FILE=${LOG_FILE:-"logs/ingest-from-html.log"}
 RESULTS_FILE=${RESULTS_FILE:-"logs/ingest-from-html-results.jsonl"}
@@ -81,13 +82,31 @@ function json_escape() {
 
 function parse_csv_line() {
   local line="$1"
-  IFS=';' read -r sourceType library version url docId contentCss removeCss <<< "$line"
+  local -a fields
+  fields=("${(@s:;:)line}")
+
+  local sourceType library version url docId docKind contentCss removeCss
+  sourceType=${fields[1]-""}
+  library=${fields[2]-""}
+  version=${fields[3]-""}
+  url=${fields[4]-""}
+  docId=${fields[5]-""}
+  if (( ${#fields[@]} >= 8 )); then
+    docKind=${fields[6]-""}
+    contentCss=${fields[7]-""}
+    removeCss=${fields[8]-""}
+  else
+    docKind=""
+    contentCss=${fields[6]-""}
+    removeCss=${fields[7]-""}
+  fi
 
   sourceType=${sourceType%$'\r'}
   library=${library%$'\r'}
   version=${version%$'\r'}
   url=${url%$'\r'}
   docId=${docId%$'\r'}
+  docKind=${docKind%$'\r'}
   contentCss=${contentCss%$'\r'}
   removeCss=${removeCss%$'\r'}
 
@@ -96,6 +115,13 @@ function parse_csv_line() {
   version=${version:-$DEFAULT_VERSION}
   url=${url:-""}
   docId=${docId:-""}
+  if [[ -z "$docKind" ]]; then
+    if [[ "$sourceType" == "SPRING_RELEASE_NOTE" ]]; then
+      docKind="RELEASE_NOTES"
+    else
+      docKind="DOC"
+    fi
+  fi
   contentCss=${contentCss:-$SELECTOR_CONTENT_CSS}
   removeCss=${removeCss:-$SELECTOR_REMOVE_CSS}
 
@@ -111,6 +137,7 @@ function parse_csv_line() {
     version "$version"
     url "$url"
     docId "$docId"
+    docKind "$docKind"
     contentCss "$contentCss"
     removeCss "$removeCss"
   )
@@ -122,13 +149,14 @@ function build_payload() {
   local removeCssCsv="$2"
 
   local -a fields selectors remove_items
-  local urlEsc sourceEsc libraryEsc versionEsc docEsc contentEsc
+  local urlEsc sourceEsc libraryEsc versionEsc docEsc docKindEsc contentEsc
 
   urlEsc=$(json_escape "${CURRENT_LINE[url]}")
   sourceEsc=$(json_escape "${CURRENT_LINE[sourceType]}")
   libraryEsc=$(json_escape "${CURRENT_LINE[library]}")
   versionEsc=$(json_escape "${CURRENT_LINE[version]}")
   docEsc=$(json_escape "${CURRENT_LINE[docId]}")
+  docKindEsc=$(json_escape "${CURRENT_LINE[docKind]}")
   contentEsc=$(json_escape "$contentCss")
 
   if [[ "$USE_MCP_TOOL" == "true" ]]; then
@@ -177,6 +205,9 @@ function build_payload() {
 
   if [[ -n "${CURRENT_LINE[docId]}" ]]; then
     fields+=("\"docId\":\"$docEsc\"")
+  fi
+  if [[ -n "${CURRENT_LINE[docKind]}" ]]; then
+    fields+=("\"docKind\":\"$docKindEsc\"")
   fi
 
   if (( ${#selectors[@]} > 0 )); then
@@ -364,7 +395,7 @@ function main() {
     local payload selectors_remove
     selectors_remove="${CURRENT_LINE[removeCss]}"
     payload=$(build_payload "${CURRENT_LINE[contentCss]}" "$selectors_remove")
-    log_line INFO "Ligne $line_no : url=${CURRENT_LINE[url]} sourceType=${CURRENT_LINE[sourceType]} library=${CURRENT_LINE[library]} version=${CURRENT_LINE[version]}"
+    log_line INFO "Ligne $line_no : url=${CURRENT_LINE[url]} sourceType=${CURRENT_LINE[sourceType]} library=${CURRENT_LINE[library]} version=${CURRENT_LINE[version]} docKind=${CURRENT_LINE[docKind]}"
     if [[ -n "$selectors_remove" ]]; then
       log_line DEBUG "Sélecteurs de suppression: $selectors_remove"
     fi

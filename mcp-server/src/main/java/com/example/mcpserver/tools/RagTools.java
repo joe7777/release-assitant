@@ -46,14 +46,14 @@ public class RagTools {
 
     @Tool(name = "rag.ingestFromHtml", description = "Ingère une page HTML dans le RAG")
     public RagIngestionResponse ingestFromHtml(String url, String sourceType, String library, String version,
-            String docId, List<String> selectors) throws IOException {
-        return ragService.ingestFromHtml(url, sourceType, library, version, docId, selectors);
+            String docId, String docKind, List<String> selectors) throws IOException {
+        return ragService.ingestFromHtml(url, sourceType, library, version, docId, docKind, selectors);
     }
 
     @Tool(name = "rag.ingestText", description = "Ingère un texte brut")
     public RagIngestionResponse ingestText(String sourceType, String library, String version, String content, String url,
-            String docId) {
-        return ragService.ingestText(sourceType, library, version, content, url, docId);
+            String docId, String docKind) {
+        return ragService.ingestText(sourceType, library, version, content, url, docId, docKind);
     }
 
     @Tool(name = "rag.search", description = "Recherche des chunks dans Qdrant")

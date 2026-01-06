@@ -53,7 +53,7 @@ public class RagController {
         return Mono.fromCallable(() -> ragService.ingestFromHtml((String) payload.get("url"),
                         (String) payload.get("sourceType"), (String) payload.get("library"),
                         (String) payload.get("version"), (String) payload.getOrDefault("docId", ""),
-                        (List<String>) payload.getOrDefault("selectors", List.of())))
+                        (String) payload.getOrDefault("docKind", ""), (List<String>) payload.getOrDefault("selectors", List.of())))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
     }
@@ -62,7 +62,8 @@ public class RagController {
     public Mono<ResponseEntity<RagIngestionResponse>> ingestText(@RequestBody Map<String, Object> payload) {
         return Mono.fromCallable(() -> ragService.ingestText((String) payload.get("sourceType"),
                         (String) payload.get("library"), (String) payload.get("version"),
-                        (String) payload.get("content"), (String) payload.get("url"), (String) payload.get("docId")))
+                        (String) payload.get("content"), (String) payload.get("url"), (String) payload.get("docId"),
+                        (String) payload.getOrDefault("docKind", "")))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok);
     }
