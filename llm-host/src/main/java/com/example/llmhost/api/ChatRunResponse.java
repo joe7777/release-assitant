@@ -6,6 +6,7 @@ public record ChatRunResponse(
         String output,
         String structuredJson,
         List<ToolCallTrace> toolCalls,
-        boolean toolsUsed
+        boolean toolsUsed,
+        GatingStats gating
 ) {
 }
