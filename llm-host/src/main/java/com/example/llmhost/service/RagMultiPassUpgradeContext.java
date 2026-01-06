@@ -76,8 +76,11 @@ public class RagMultiPassUpgradeContext {
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("sourceType", "SPRING_RELEASE_NOTE");
         filters.put("library", "spring-boot");
-        filters.put("docKind", List.of("MIGRATION_GUIDE", "RELEASE_NOTES"));
-        return ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
+        filters.put("version", List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps"));
+        logger.debug("RAG search migration guide query='{}' filters={} topK={}", query, filters, RELEASE_NOTES_TOP_K);
+        List<RagHit> hits = ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
+        logger.debug("RAG search migration guide hits={}", hits == null ? 0 : hits.size());
+        return hits;
     }
 
     private List<RagHit> retrieveDeprecations(String fromVersion, String toVersion) {
@@ -85,8 +88,11 @@ public class RagMultiPassUpgradeContext {
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("sourceType", "SPRING_RELEASE_NOTE");
         filters.put("library", "spring-boot");
-        filters.put("docKind", List.of("RELEASE_NOTES", "SOURCE_CODE"));
-        return ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
+        filters.put("version", List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps"));
+        logger.debug("RAG search deprecations query='{}' filters={} topK={}", query, filters, RELEASE_NOTES_TOP_K);
+        List<RagHit> hits = ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
+        logger.debug("RAG search deprecations hits={}", hits == null ? 0 : hits.size());
+        return hits;
     }
 
     private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> migrationHits, List<RagHit> deprecationHits) {
