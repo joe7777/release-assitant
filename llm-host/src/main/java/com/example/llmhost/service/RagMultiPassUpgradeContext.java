@@ -1,13 +1,18 @@
 package com.example.llmhost.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.rag.RagHit;
 import com.example.llmhost.rag.RagLookupClient;
 import com.example.llmhost.rag.RagSearchClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,24 +24,32 @@ public class RagMultiPassUpgradeContext {
     private static final int RELEASE_NOTES_TOP_K = 5;
     private static final int MAX_HITS = 10;
     private static final int PROJECT_FACT_TOP_K = 3;
+    private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
 
     private final RagSearchClient ragSearchClient;
     private final RagLookupClient ragLookupClient;
     private final RagContextBuilder ragContextBuilder;
+    private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
     public RagMultiPassUpgradeContext(RagSearchClient ragSearchClient, RagLookupClient ragLookupClient,
-            RagContextBuilder ragContextBuilder) {
+            RagContextBuilder ragContextBuilder, AppProperties appProperties, ObjectMapper objectMapper) {
         this.ragSearchClient = ragSearchClient;
         this.ragLookupClient = ragLookupClient;
         this.ragContextBuilder = ragContextBuilder;
+        this.appProperties = appProperties;
+        this.objectMapper = objectMapper;
     }
 
     public UpgradeContext retrieve(String fromVersion, String toVersion, String workspaceId, String repoUrl) {
         List<RagHit> projectFacts = retrieveProjectFacts(workspaceId);
         List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion);
         List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion);
+        List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
+                ? retrieveSpringSourceSnippets(projectFacts, toVersion)
+                : List.of();
 
-        List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits);
+        List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits, sourceCodeHits);
         String contextText = ragContextBuilder.buildContext(merged, 6000);
         return new UpgradeContext(merged, contextText);
     }
@@ -95,7 +108,86 @@ public class RagMultiPassUpgradeContext {
         return hits;
     }
 
-    private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> migrationHits, List<RagHit> deprecationHits) {
+    private List<RagHit> retrieveSpringSourceSnippets(List<RagHit> projectFacts, String toVersion) {
+        Optional<RagHit> inventory = Optional.empty();
+        if (projectFacts != null) {
+            inventory = projectFacts.stream()
+                    .filter(hit -> hit != null && hit.metadata() != null)
+                    .filter(hit -> {
+                        Object documentKey = hit.metadata().get("documentKey");
+                        return documentKey != null && documentKey.toString().contains("/spring-usage-inventory");
+                    })
+                    .findFirst();
+            if (inventory.isEmpty()) {
+                inventory = projectFacts.stream().findFirst();
+            }
+        }
+        if (inventory.isEmpty()) {
+            logger.info("Aucun PROJECT_FACT spring-usage-inventory pour récupérer les imports Spring.");
+            return List.of();
+        }
+        String json = inventory.get().text();
+        if (json == null || json.isBlank()) {
+            logger.info("PROJECT_FACT spring-usage-inventory vide, aucun import Spring récupérable.");
+            return List.of();
+        }
+        List<String> springImports = extractSpringImports(json);
+        if (springImports.isEmpty()) {
+            logger.info("Aucun import Spring trouvé dans le PROJECT_FACT.");
+            return List.of();
+        }
+        Map<String, RagHit> unique = new LinkedHashMap<>();
+        for (String springImport : springImports) {
+            Map<String, Object> filters = new LinkedHashMap<>();
+            filters.put("sourceType", List.of("SPRING_SOURCE", "SPRING_BOOT_SOURCE"));
+            filters.put("version", toVersion);
+            logger.debug("RAG search spring source query='{}' filters={} topK=1", springImport, filters);
+            List<RagHit> hits = ragSearchClient.search(springImport, filters, 1);
+            appendUnique(unique, hits);
+            if (unique.size() >= MAX_HITS) {
+                break;
+            }
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private List<String> extractSpringImports(String json) {
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            List<String> imports = new ArrayList<>();
+            JsonNode topImports = root.path("topImports");
+            if (topImports.isArray()) {
+                for (JsonNode node : topImports) {
+                    String name = node.path("name").asText(null);
+                    if (name != null && !name.isBlank()) {
+                        imports.add(name);
+                    }
+                }
+            }
+            if (imports.isEmpty()) {
+                JsonNode springImports = root.path("springImports");
+                if (springImports.isArray()) {
+                    for (JsonNode node : springImports) {
+                        String name = node.asText(null);
+                        if (name != null && !name.isBlank()) {
+                            imports.add(name);
+                        }
+                    }
+                }
+            }
+            return imports.stream()
+                    .filter(name -> name.contains("org.springframework."))
+                    .distinct()
+                    .limit(SPRING_SOURCE_IMPORT_LIMIT)
+                    .toList();
+        } catch (IOException ex) {
+            logger.warn("Impossible de parser le PROJECT_FACT spring-usage-inventory.", ex);
+            return List.of();
+        }
+    }
+
+    private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> migrationHits,
+            List<RagHit> deprecationHits, List<RagHit> sourceCodeHits) {
         List<RagHit> merged = new ArrayList<>();
         if (projectFacts != null && !projectFacts.isEmpty()) {
             merged.add(projectFacts.getFirst());
@@ -103,6 +195,7 @@ public class RagMultiPassUpgradeContext {
         Map<String, RagHit> unique = new LinkedHashMap<>();
         appendUnique(unique, migrationHits);
         appendUnique(unique, deprecationHits);
+        appendUnique(unique, sourceCodeHits);
         for (RagHit hit : unique.values()) {
             if (merged.size() >= MAX_HITS) {
                 break;
