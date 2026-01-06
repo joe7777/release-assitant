@@ -12,7 +12,8 @@ public record ChatRequest(
         String workspaceId,
         String repoUrl,
         String fromVersion,
-        String toVersion
+        String toVersion,
+        String moduleFocus
 ) {
 
     public enum Mode {
