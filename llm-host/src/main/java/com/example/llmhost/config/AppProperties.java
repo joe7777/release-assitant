@@ -172,6 +172,7 @@ public class AppProperties {
         private double citationCoverageRatio = 0.5;
         private int citationMinSourcesForCoverage = 4;
         private int citationMinSourcesRequired = 1;
+        private boolean enableSourceCodePass = true;
 
         public double getCitationCoverageRatio() {
             return citationCoverageRatio;
@@ -195,6 +196,14 @@ public class AppProperties {
 
         public void setCitationMinSourcesRequired(int citationMinSourcesRequired) {
             this.citationMinSourcesRequired = citationMinSourcesRequired;
+        }
+
+        public boolean isEnableSourceCodePass() {
+            return enableSourceCodePass;
+        }
+
+        public void setEnableSourceCodePass(boolean enableSourceCodePass) {
+            this.enableSourceCodePass = enableSourceCodePass;
         }
     }
 }

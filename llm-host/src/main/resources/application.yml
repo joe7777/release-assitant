@@ -48,6 +48,7 @@ app:
     citation-coverage-ratio: ${APP_RAG_CITATION_COVERAGE_RATIO:0.5}
     citation-min-sources-for-coverage: ${APP_RAG_CITATION_MIN_SOURCES:4}
     citation-min-sources-required: ${APP_RAG_CITATION_MIN_REQUIRED:1}
+    enable-source-code-pass: ${APP_RAG_ENABLE_SOURCE_CODE_PASS:true}
   system-prompt: |
     Tu es un orchestrateur Spring Boot Upgrade Assistant.
     Rôle: décider des tool-calls MCP (project.*, rag.*, methodology.*) pour répondre.
