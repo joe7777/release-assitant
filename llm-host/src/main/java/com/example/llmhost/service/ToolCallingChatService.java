@@ -45,6 +45,7 @@ public class ToolCallingChatService {
     private final RagMultiPassUpgradeContext upgradeContextService;
     private final ObjectMapper objectMapper;
     private final MethodologyClient methodologyClient;
+    private final UpgradeReportEvidenceGate evidenceGate;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
             List<ToolCallback> functionCallbacks, RagMultiPassUpgradeContext upgradeContextService,
@@ -57,6 +58,7 @@ public class ToolCallingChatService {
         this.upgradeContextService = upgradeContextService;
         this.objectMapper = objectMapper;
         this.methodologyClient = methodologyClient;
+        this.evidenceGate = new UpgradeReportEvidenceGate();
     }
 
     public ChatRunResponse run(ChatRequest request) {
@@ -67,19 +69,31 @@ public class ToolCallingChatService {
                 ? Collections.emptyList()
                 : shouldUseTools(request) ? wrapCallbacks(traces) : Collections.emptyList();
 
-        String content = guidedMode
-                ? runGuidedUpgrade(request)
-                : chatClient.prompt()
-                        .system(systemPromptProvider.buildSystemPrompt())
-                        .user(request.prompt())
-                        .advisors(loggingAdvisor)
-                        .toolCallbacks(callbacks)
-                        .call()
-                        .content();
+        GuidedUpgradeResult guidedResult = null;
+        String content;
+        if (guidedMode) {
+            guidedResult = runGuidedUpgrade(request);
+            content = guidedResult.content();
+        } else {
+            content = chatClient.prompt()
+                    .system(systemPromptProvider.buildSystemPrompt())
+                    .user(request.prompt())
+                    .advisors(loggingAdvisor)
+                    .toolCallbacks(callbacks)
+                    .call()
+                    .content();
+        }
         ValidationResult validation = validateAndRepairReport(content);
         UpgradeReport report = validation.report();
         String json = validation.json();
         String output = validation.content();
+        if (guidedMode && report != null && guidedResult != null) {
+            report = evidenceGate.apply(report, guidedResult.context().hits().size());
+            json = writeReportJson(report, json);
+        }
+        if (guidedMode && json != null) {
+            output = json;
+        }
         if (report != null) {
             Optional<String> formatted = methodologyClient.writeReport(json);
             if (formatted.isPresent()) {
@@ -113,7 +127,7 @@ public class ToolCallingChatService {
         return request.prompt() != null && UPGRADE_PATTERN.matcher(request.prompt()).find();
     }
 
-    private String runGuidedUpgrade(ChatRequest request) {
+    private GuidedUpgradeResult runGuidedUpgrade(ChatRequest request) {
         requireGuidedFields(request);
         UpgradeContext context = upgradeContextService.retrieve(
                 request.fromVersion(),
@@ -122,14 +136,15 @@ public class ToolCallingChatService {
                 request.repoUrl()
         );
         String systemPrompt = systemPromptProvider.buildGuidedUpgradePrompt();
-        String userPrompt = buildGuidedUserPrompt(request, context.contextText());
-        return chatClient.prompt()
+        String userPrompt = buildGuidedUserPrompt(request, context);
+        String content = chatClient.prompt()
                 .system(systemPrompt)
                 .user(userPrompt)
                 .advisors(loggingAdvisor)
                 .toolCallbacks(Collections.emptyList())
                 .call()
                 .content();
+        return new GuidedUpgradeResult(content, context);
     }
 
     private void requireGuidedFields(ChatRequest request) {
@@ -144,10 +159,12 @@ public class ToolCallingChatService {
         }
     }
 
-    private String buildGuidedUserPrompt(ChatRequest request, String contextText) {
+    private String buildGuidedUserPrompt(ChatRequest request, UpgradeContext context) {
         StringBuilder builder = new StringBuilder();
         builder.append("Réponds uniquement avec un JSON valide conforme au contrat UpgradeReport.\n");
+        builder.append("N'utilise jamais ```json``` ni markdown, retourne uniquement un objet JSON.\n");
         builder.append(systemPromptProvider.upgradeReportContract()).append("\n");
+        builder.append("SOURCES AUTORISÉES: ").append(buildAllowedSources(context.hits().size())).append("\n");
         builder.append("Project attendu: repoUrl=").append(request.repoUrl())
                 .append(", workspaceId=").append(request.workspaceId())
                 .append(", from=").append(request.fromVersion())
@@ -156,8 +173,30 @@ public class ToolCallingChatService {
         if (StringUtils.hasText(request.prompt())) {
             builder.append("\nQUESTION:\n").append(request.prompt()).append("\n");
         }
-        builder.append("\n").append(contextText);
+        builder.append("\n").append(context.contextText());
         return builder.toString();
+    }
+
+    private String buildAllowedSources(int sourceCount) {
+        if (sourceCount <= 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 1; i <= sourceCount; i++) {
+            if (i > 1) {
+                builder.append(',');
+            }
+            builder.append('S').append(i);
+        }
+        return builder.toString();
+    }
+
+    private String writeReportJson(UpgradeReport report, String fallback) {
+        try {
+            return objectMapper.writeValueAsString(report);
+        } catch (Exception ex) {
+            return fallback;
+        }
     }
 
     private List<ToolCallback> wrapCallbacks(List<ToolCallTrace> traces) {
@@ -217,6 +256,9 @@ public class ToolCallingChatService {
     }
 
     private record ValidationResult(String content, String json, UpgradeReport report) {
+    }
+
+    private record GuidedUpgradeResult(String content, UpgradeContext context) {
     }
 
     private static class LoggingToolCallback implements ToolCallback {
