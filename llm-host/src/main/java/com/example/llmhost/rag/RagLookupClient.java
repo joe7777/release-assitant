@@ -53,13 +53,16 @@ public class RagLookupClient {
         }
     }
 
-    private List<RagHit> parseResponse(String response) {
+    private List<RagHit> parseResponse(String payload) {
         try {
-            if (!StringUtils.hasText(response)) {
+            if (!StringUtils.hasText(payload)) {
                 throw new IllegalStateException("rag.lookup response must be JSON array");
             }
-            JsonNode root = objectMapper.readTree(response);
+            JsonNode root = objectMapper.readTree(payload);
             NormalizedResponse normalized = normalizeResponse(root);
+            if (!normalized.hits().isArray()) {
+                throw new IllegalStateException("rag.lookup response must be JSON array");
+            }
             List<RagHit> hits = objectMapper.convertValue(normalized.hits(), new TypeReference<>() {
             });
             LOGGER.debug("rag.lookup response format={} hits={}", normalized.format(), hits.size());
