@@ -11,6 +11,7 @@ import com.example.llmhost.model.UpgradeReport;
 public class UpgradeReportEvidenceGate {
 
     private static final String REASON = "EVIDENCE_NOT_ALLOWED_OR_MISSING";
+    private static final String REASON_INVALID_REPORT = "REPORT_INVALID_OR_TRUNCATED";
 
     public UpgradeReport apply(UpgradeReport report, int sourceCount) {
         return applyWithReport(report, sourceCount).report();
@@ -30,13 +31,29 @@ public class UpgradeReportEvidenceGate {
                     0,
                     0,
                     0,
-                    REASON
+                    REASON_INVALID_REPORT
             );
             return new EvidenceGateResult(null, stats);
         }
         int impactsBefore = report.getImpacts().size();
         int workpointsBefore = report.getWorkpoints().size();
         int unknownsBefore = report.getUnknowns().size();
+        if (impactsBefore == 0 && workpointsBefore == 0 && unknownsBefore == 0) {
+            GatingStats stats = new GatingStats(
+                    allowedSources,
+                    0,
+                    0,
+                    0,
+                    impactsBefore,
+                    impactsBefore,
+                    workpointsBefore,
+                    workpointsBefore,
+                    unknownsBefore,
+                    unknownsBefore,
+                    REASON_INVALID_REPORT
+            );
+            return new EvidenceGateResult(report, stats);
+        }
         filterImpacts(report, allowedSources);
         filterWorkpoints(report, allowedSources);
         filterUnknowns(report, allowedSources);
