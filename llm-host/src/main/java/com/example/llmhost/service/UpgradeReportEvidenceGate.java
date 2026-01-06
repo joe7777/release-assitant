@@ -5,22 +5,61 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.example.llmhost.api.GatingStats;
 import com.example.llmhost.model.UpgradeReport;
 
 public class UpgradeReportEvidenceGate {
 
+    private static final String REASON = "EVIDENCE_NOT_ALLOWED_OR_MISSING";
+
     public UpgradeReport apply(UpgradeReport report, int sourceCount) {
-        if (report == null) {
-            return null;
-        }
+        return applyWithReport(report, sourceCount).report();
+    }
+
+    public EvidenceGateResult applyWithReport(UpgradeReport report, int sourceCount) {
         List<String> allowedSources = buildAllowedSources(sourceCount);
+        if (report == null) {
+            GatingStats stats = new GatingStats(
+                    allowedSources,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    REASON
+            );
+            return new EvidenceGateResult(null, stats);
+        }
+        int impactsBefore = report.getImpacts().size();
+        int workpointsBefore = report.getWorkpoints().size();
+        int unknownsBefore = report.getUnknowns().size();
         filterImpacts(report, allowedSources);
         filterWorkpoints(report, allowedSources);
         filterUnknowns(report, allowedSources);
         if (report.getImpacts().isEmpty()) {
-            return buildNotFoundReport(report, allowedSources);
+            report = buildNotFoundReport(report, allowedSources);
         }
-        return report;
+        int impactsAfter = report.getImpacts().size();
+        int workpointsAfter = report.getWorkpoints().size();
+        int unknownsAfter = report.getUnknowns().size();
+        GatingStats stats = new GatingStats(
+                allowedSources,
+                Math.max(0, impactsBefore - impactsAfter),
+                Math.max(0, workpointsBefore - workpointsAfter),
+                Math.max(0, unknownsBefore - unknownsAfter),
+                impactsBefore,
+                impactsAfter,
+                workpointsBefore,
+                workpointsAfter,
+                unknownsBefore,
+                unknownsAfter,
+                REASON
+        );
+        return new EvidenceGateResult(report, stats);
     }
 
     private void filterImpacts(UpgradeReport report, List<String> allowedSources) {

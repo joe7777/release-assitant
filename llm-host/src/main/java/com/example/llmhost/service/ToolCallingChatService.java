@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import com.example.llmhost.api.ChatRequest;
 import com.example.llmhost.api.ChatRunResponse;
+import com.example.llmhost.api.GatingStats;
 import com.example.llmhost.api.ToolCallTrace;
 import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.config.AppProperties.ToolingProperties;
@@ -87,9 +88,15 @@ public class ToolCallingChatService {
         UpgradeReport report = validation.report();
         String json = validation.json();
         String output = validation.content();
+        GatingStats gating = null;
         if (guidedMode && report != null && guidedResult != null) {
-            report = evidenceGate.apply(report, guidedResult.context().hits().size());
+            EvidenceGateResult gatedResult = evidenceGate.applyWithReport(report, guidedResult.context().hits().size());
+            report = gatedResult.report();
+            gating = gatedResult.stats();
             json = writeReportJson(report, json);
+        } else if (guidedMode) {
+            int sourceCount = guidedResult == null ? 0 : guidedResult.context().hits().size();
+            gating = evidenceGate.applyWithReport(report, sourceCount).stats();
         }
         if (guidedMode && json != null) {
             output = json;
@@ -103,7 +110,7 @@ public class ToolCallingChatService {
         }
 
         boolean toolsUsed = !guidedMode && shouldUseTools(request);
-        return new ChatRunResponse(output, json, traces, toolsUsed);
+        return new ChatRunResponse(output, json, traces, toolsUsed, gating);
     }
 
     private boolean shouldUseTools(ChatRequest request) {
