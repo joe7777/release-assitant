@@ -122,7 +122,9 @@ public class RagService {
     }
 
     public List<RagSearchResult> search(String query, Map<String, Object> filters, int topK) {
-        int requestTopK = Math.max(1, topK * 4);
+        boolean filtersApplied = filters != null && !filters.isEmpty();
+        int normalizedTopK = Math.max(1, topK);
+        int requestTopK = normalizedTopK * (filtersApplied ? 10 : 4);
         List<Document> results = vectorStore
                 .similaritySearch(SearchRequest.builder().query(query).topK(requestTopK).build());
         if (logger.isDebugEnabled()) {
@@ -133,11 +135,15 @@ public class RagService {
                 .collect(Collectors.toList());
         if (logger.isDebugEnabled()) {
             logger.debug("rag.search filtered to {} documents", filtered.size());
+            if (filtersApplied) {
+                logger.debug("rag.search filtersApplied=true, requestTopK={}, topK={}, beforeFilter={}, afterFilter={}",
+                        requestTopK, normalizedTopK, results.size(), filtered.size());
+            }
             if (filtered.isEmpty() && filters != null && !filters.isEmpty()) {
                 logger.debug("rag.search filters removed all results. Filter keys: {}", filters.keySet());
             }
         }
-        return filtered.stream().limit(topK)
+        return filtered.stream().limit(normalizedTopK)
                 .map(doc -> new RagSearchResult(doc.getText(), doc.getScore(), doc.getMetadata()))
                 .collect(Collectors.toList());
     }
@@ -336,25 +342,61 @@ public class RagService {
         if (docValue == null) {
             return false;
         }
-        if (filterValue instanceof Collection<?> filterCollection) {
-            return matchesCollectionFilter(docValue, filterCollection);
+        Collection<?> filterCollection = asCollection(filterValue);
+        Collection<?> docCollection = asCollection(docValue);
+        if (filterCollection != null && docCollection != null) {
+            return collectionsIntersect(docCollection, filterCollection);
         }
-        if (docValue instanceof Collection<?> docCollection) {
-            return docCollection.contains(filterValue);
+        if (filterCollection != null) {
+            return collectionContains(filterCollection, docValue);
         }
-        return Objects.equals(docValue, filterValue);
+        if (docCollection != null) {
+            return collectionContains(docCollection, filterValue);
+        }
+        return valuesEqual(docValue, filterValue);
     }
 
-    private boolean matchesCollectionFilter(Object docValue, Collection<?> filterCollection) {
-        if (docValue instanceof Collection<?> docCollection) {
-            for (Object docEntry : docCollection) {
-                if (filterCollection.contains(docEntry)) {
-                    return true;
-                }
-            }
-            return false;
+    private Collection<?> asCollection(Object value) {
+        if (value instanceof Collection<?> collection) {
+            return collection;
         }
-        return filterCollection.contains(docValue);
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> values = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                values.add(java.lang.reflect.Array.get(value, i));
+            }
+            return values;
+        }
+        return null;
+    }
+
+    private boolean collectionsIntersect(Collection<?> left, Collection<?> right) {
+        for (Object leftValue : left) {
+            if (collectionContains(right, leftValue)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean collectionContains(Collection<?> collection, Object candidate) {
+        for (Object value : collection) {
+            if (valuesEqual(value, candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean valuesEqual(Object left, Object right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        if (left.getClass().equals(right.getClass())) {
+            return Objects.equals(left, right);
+        }
+        return Objects.equals(String.valueOf(left), String.valueOf(right));
     }
 
     private static class ContentTooLargeException extends IOException {
