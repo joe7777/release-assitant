@@ -140,7 +140,8 @@ public class ToolCallingChatService {
                 request.fromVersion(),
                 request.toVersion(),
                 request.workspaceId(),
-                request.repoUrl()
+                request.repoUrl(),
+                request.moduleFocus()
         );
         String systemPrompt = systemPromptProvider.buildGuidedUpgradePrompt();
         String userPrompt = buildGuidedUserPrompt(request, context);
@@ -177,6 +178,9 @@ public class ToolCallingChatService {
                 .append(", from=").append(request.fromVersion())
                 .append(", to=").append(request.toVersion())
                 .append("\n");
+        if (StringUtils.hasText(request.moduleFocus())) {
+            builder.append("Module focus: ").append(request.moduleFocus()).append("\n");
+        }
         if (StringUtils.hasText(request.prompt())) {
             builder.append("\nQUESTION:\n").append(request.prompt()).append("\n");
         }

@@ -17,14 +17,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class RagMultiPassUpgradeContext {
 
     private static final Logger logger = LoggerFactory.getLogger(RagMultiPassUpgradeContext.class);
     private static final int RELEASE_NOTES_TOP_K = 5;
-    private static final int MAX_HITS = 10;
-    private static final int PROJECT_FACT_TOP_K = 3;
+    private static final int MAX_HITS = 20;
+    private static final int PROJECT_FACT_TOP_K = 25;
     private static final int MAX_PROJECT_FACT_CHARS = 1500;
     private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
@@ -49,8 +50,22 @@ public class RagMultiPassUpgradeContext {
 
     public UpgradeContext retrieve(String fromVersion, String toVersion, String workspaceId, String repoUrl) {
         List<RagHit> projectFacts = retrieveProjectFacts(workspaceId);
-        List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion);
-        List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion);
+        List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, null);
+        List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, null);
+        List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
+                ? retrieveSpringSourceSnippets(projectFacts, toVersion)
+                : List.of();
+
+        List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits, sourceCodeHits);
+        String contextText = ragContextBuilder.buildContext(merged, 6000, MAX_PROJECT_FACT_CHARS);
+        return new UpgradeContext(merged, contextText);
+    }
+
+    public UpgradeContext retrieve(String fromVersion, String toVersion, String workspaceId, String repoUrl,
+            String moduleFocus) {
+        List<RagHit> projectFacts = retrieveProjectFacts(workspaceId);
+        List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, moduleFocus);
+        List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, moduleFocus);
         List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
                 ? retrieveSpringSourceSnippets(projectFacts, toVersion)
                 : List.of();
@@ -74,20 +89,22 @@ public class RagMultiPassUpgradeContext {
         return hits;
     }
 
-    private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion) {
-        String query = "Spring Boot " + toVersion + " upgrading migration guide breaking changes from " + fromVersion;
+    private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion, String moduleFocus) {
+        String query = buildMigrationQuery(fromVersion, toVersion, moduleFocus);
+        int topK = resolveReleaseNotesTopK(moduleFocus);
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("sourceType", "SPRING_RELEASE_NOTE");
         filters.put("library", "spring-boot");
         filters.put("version", List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps"));
-        logger.debug("RAG search migration guide query='{}' filters={} topK={}", query, filters, RELEASE_NOTES_TOP_K);
-        List<RagHit> hits = ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
+        logger.debug("RAG search migration guide query='{}' filters={} topK={}", query, filters, topK);
+        List<RagHit> hits = ragSearchClient.search(query, filters, topK);
         logger.debug("RAG search migration guide hits={}", hits == null ? 0 : hits.size());
         return hits;
     }
 
-    private List<RagHit> retrieveDeprecations(String fromVersion, String toVersion) {
-        String query = "Spring Boot " + toVersion + " deprecated removed api changes from " + fromVersion;
+    private List<RagHit> retrieveDeprecations(String fromVersion, String toVersion, String moduleFocus) {
+        String query = buildDeprecationsQuery(fromVersion, toVersion, moduleFocus);
+        int topK = resolveReleaseNotesTopK(moduleFocus);
         List<String> versionFilters = List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps");
 
         Map<String, Object> strictFilters = new LinkedHashMap<>();
@@ -95,7 +112,7 @@ public class RagMultiPassUpgradeContext {
         strictFilters.put("library", "spring-boot");
         strictFilters.put("version", versionFilters);
         strictFilters.put("docKind", "SPRING_RELEASE_NOTE");
-        List<RagHit> hits = ragSearchClient.search(query, strictFilters, RELEASE_NOTES_TOP_K);
+        List<RagHit> hits = ragSearchClient.search(query, strictFilters, topK);
         int hitCount = hits == null ? 0 : hits.size();
         logger.debug("RAG search deprecations passUsed=A query='{}' filters={} hits={}", query, strictFilters, hitCount);
         if (hitCount > 0) {
@@ -105,7 +122,7 @@ public class RagMultiPassUpgradeContext {
         Map<String, Object> relaxedFilters = new LinkedHashMap<>();
         relaxedFilters.put("sourceType", "SPRING_RELEASE_NOTE");
         relaxedFilters.put("library", "spring-boot");
-        List<RagHit> relaxedHits = ragSearchClient.search(query, relaxedFilters, RELEASE_NOTES_TOP_K);
+        List<RagHit> relaxedHits = ragSearchClient.search(query, relaxedFilters, topK);
         int relaxedHitCount = relaxedHits == null ? 0 : relaxedHits.size();
         logger.debug("RAG search deprecations passUsed=B query='{}' filters={} hits={}", query, relaxedFilters,
                 relaxedHitCount);
@@ -123,11 +140,36 @@ public class RagMultiPassUpgradeContext {
                 : lookupHits.stream()
                         .filter(hit -> hit != null && hit.text() != null
                                 && DEPRECATION_PATTERN.matcher(hit.text()).find())
-                        .limit(RELEASE_NOTES_TOP_K)
+                        .limit(topK)
                         .toList();
         logger.debug("RAG lookup deprecations passUsed=C query='lookup' filters={} hits={}", lookupFilters,
                 filteredHits.size());
         return filteredHits;
+    }
+
+    private String buildMigrationQuery(String fromVersion, String toVersion, String moduleFocus) {
+        if (isWebModuleFocus(moduleFocus)) {
+            return "Spring Boot " + toVersion
+                    + " upgrading migration guide breaking changes webmvc controller webflux servlet tomcat from "
+                    + fromVersion;
+        }
+        return "Spring Boot " + toVersion + " upgrading migration guide breaking changes from " + fromVersion;
+    }
+
+    private String buildDeprecationsQuery(String fromVersion, String toVersion, String moduleFocus) {
+        if (isWebModuleFocus(moduleFocus)) {
+            return "Spring Boot " + toVersion
+                    + " deprecated removed api webmvc controller webflux servlet tomcat from " + fromVersion;
+        }
+        return "Spring Boot " + toVersion + " deprecated removed api changes from " + fromVersion;
+    }
+
+    private int resolveReleaseNotesTopK(String moduleFocus) {
+        return isWebModuleFocus(moduleFocus) ? MAX_HITS : RELEASE_NOTES_TOP_K;
+    }
+
+    private boolean isWebModuleFocus(String moduleFocus) {
+        return StringUtils.hasText(moduleFocus) && "web".equalsIgnoreCase(moduleFocus.trim());
     }
 
     private List<RagHit> retrieveSpringSourceSnippets(List<RagHit> projectFacts, String toVersion) {
