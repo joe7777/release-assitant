@@ -323,8 +323,15 @@ public class RagService {
         if (filters == null || filters.isEmpty()) {
             return true;
         }
+        Map<String, Object> metadata = doc.getMetadata();
         for (Map.Entry<String, Object> entry : filters.entrySet()) {
-            Object value = doc.getMetadata().get(entry.getKey());
+            if (metadata == null || !metadata.containsKey(entry.getKey())) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Ignoring filter key '{}' because it is absent from metadata.", entry.getKey());
+                }
+                continue;
+            }
+            Object value = metadata.get(entry.getKey());
             if (!matchesFilterValue(value, entry.getValue())) {
                 return false;
             }
@@ -333,8 +340,14 @@ public class RagService {
     }
 
     private boolean matchesFilterValue(Object docValue, Object filterValue) {
-        if (filterValue instanceof Map<?, ?> filterMap && filterMap.containsKey("$in")) {
-            filterValue = filterMap.get("$in");
+        if (filterValue instanceof Map<?, ?> filterMap) {
+            if (filterMap.containsKey("$in")) {
+                filterValue = filterMap.get("$in");
+            } else if (filterMap.containsKey("any")) {
+                filterValue = filterMap.get("any");
+            } else if (filterMap.containsKey("in")) {
+                filterValue = filterMap.get("in");
+            }
         }
         if (filterValue == null) {
             return docValue == null;
