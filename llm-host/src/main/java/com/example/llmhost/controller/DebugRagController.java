@@ -130,7 +130,7 @@ public class DebugRagController {
                 request.toVersion(),
                 request.workspaceId(),
                 request.repoUrl(),
-                null
+                List.of()
         );
         return new DebugUpgradeContextResponse(context.hits(), context.contextText());
     }
