@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,7 +125,19 @@ public class RagService {
         int requestTopK = Math.max(1, topK * 4);
         List<Document> results = vectorStore
                 .similaritySearch(SearchRequest.builder().query(query).topK(requestTopK).build());
-        return results.stream().filter(doc -> matchesFilters(doc, filters)).limit(topK)
+        if (logger.isDebugEnabled()) {
+            logger.debug("rag.search similaritySearch returned {} documents", results.size());
+        }
+        List<Document> filtered = results.stream()
+                .filter(doc -> matchesFilters(doc, filters))
+                .collect(Collectors.toList());
+        if (logger.isDebugEnabled()) {
+            logger.debug("rag.search filtered to {} documents", filtered.size());
+            if (filtered.isEmpty() && filters != null && !filters.isEmpty()) {
+                logger.debug("rag.search filters removed all results. Filter keys: {}", filters.keySet());
+            }
+        }
+        return filtered.stream().limit(topK)
                 .map(doc -> new RagSearchResult(doc.getText(), doc.getScore(), doc.getMetadata()))
                 .collect(Collectors.toList());
     }
@@ -306,11 +319,39 @@ public class RagService {
         }
         for (Map.Entry<String, Object> entry : filters.entrySet()) {
             Object value = doc.getMetadata().get(entry.getKey());
-            if (!Objects.equals(value, entry.getValue())) {
+            if (!matchesFilterValue(value, entry.getValue())) {
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean matchesFilterValue(Object docValue, Object filterValue) {
+        if (filterValue instanceof Map<?, ?> filterMap && filterMap.containsKey("$in")) {
+            filterValue = filterMap.get("$in");
+        }
+        if (filterValue == null) {
+            return docValue == null;
+        }
+        if (docValue == null) {
+            return false;
+        }
+        if (filterValue instanceof Collection<?> filterCollection) {
+            return matchesCollectionFilter(docValue, filterCollection);
+        }
+        return Objects.equals(docValue, filterValue);
+    }
+
+    private boolean matchesCollectionFilter(Object docValue, Collection<?> filterCollection) {
+        if (docValue instanceof Collection<?> docCollection) {
+            for (Object docEntry : docCollection) {
+                if (filterCollection.contains(docEntry)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return filterCollection.contains(docValue);
     }
 
     private static class ContentTooLargeException extends IOException {
