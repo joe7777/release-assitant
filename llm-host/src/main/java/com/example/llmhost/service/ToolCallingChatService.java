@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import com.example.llmhost.api.ChatRequest;
 import com.example.llmhost.api.ChatRunResponse;
