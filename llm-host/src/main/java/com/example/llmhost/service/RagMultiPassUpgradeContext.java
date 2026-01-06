@@ -23,7 +23,7 @@ public class RagMultiPassUpgradeContext {
     private static final Logger logger = LoggerFactory.getLogger(RagMultiPassUpgradeContext.class);
     private static final int RELEASE_NOTES_TOP_K = 5;
     private static final int MAX_HITS = 10;
-    private static final int PROJECT_FACT_TOP_K = 5;
+    private static final int PROJECT_FACT_TOP_K = 3;
     private static final int MAX_PROJECT_FACT_CHARS = 1500;
     private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
