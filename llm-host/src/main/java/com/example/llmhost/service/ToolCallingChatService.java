@@ -7,8 +7,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.example.llmhost.api.ChatRequest;
 import com.example.llmhost.api.ChatRunResponse;
@@ -33,7 +31,6 @@ import org.springframework.util.StringUtils;
 public class ToolCallingChatService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallingChatService.class);
-    private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*?\\}", Pattern.MULTILINE);
     private static final Pattern UPGRADE_PATTERN = Pattern.compile("\\bupgrade\\b", Pattern.CASE_INSENSITIVE);
     private static final String REPAIR_SYSTEM_PROMPT = "Tu es un réparateur JSON. Retourne uniquement un JSON valide "
             + "conforme au contrat UpgradeReport. Aucun texte hors JSON.";
@@ -219,10 +216,47 @@ public class ToolCallingChatService {
     }
 
     private String extractFirstJson(String content) {
-        Matcher matcher = JSON_BLOCK.matcher(content);
-        if (matcher.find()) {
-            return matcher.group();
+        if (content == null) {
+            LOGGER.debug("No JSON object found in content length=0");
+            return null;
         }
+        int start = -1;
+        int depth = 0;
+        boolean inString = false;
+        boolean escape = false;
+        for (int i = 0; i < content.length(); i++) {
+            char current = content.charAt(i);
+            if (start < 0) {
+                if (current == '{') {
+                    start = i;
+                    depth = 1;
+                }
+                continue;
+            }
+            if (inString) {
+                if (escape) {
+                    escape = false;
+                } else if (current == '\\') {
+                    escape = true;
+                } else if (current == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (current == '"') {
+                inString = true;
+                continue;
+            }
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return content.substring(start, i + 1);
+                }
+            }
+        }
+        LOGGER.debug("No JSON object found in content length={}", content.length());
         return null;
     }
 
