@@ -1,5 +1,7 @@
 package com.example.llmhost.api;
 
+import java.util.List;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -13,7 +15,7 @@ public record ChatRequest(
         String repoUrl,
         String fromVersion,
         String toVersion,
-        String moduleFocus
+        List<String> moduleFocus
 ) {
 
     public enum Mode {
