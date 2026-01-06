@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.rag.RagHit;
@@ -27,6 +28,9 @@ public class RagMultiPassUpgradeContext {
     private static final int MAX_PROJECT_FACT_CHARS = 1500;
     private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
+    private static final int DEPRECATION_LOOKUP_LIMIT = 50;
+    private static final Pattern DEPRECATION_PATTERN =
+            Pattern.compile("(?i)\\b(deprecat|deprecated|deprecation|removed|removal|breaking)\\b");
 
     private final RagSearchClient ragSearchClient;
     private final RagLookupClient ragLookupClient;
@@ -84,14 +88,46 @@ public class RagMultiPassUpgradeContext {
 
     private List<RagHit> retrieveDeprecations(String fromVersion, String toVersion) {
         String query = "Spring Boot " + toVersion + " deprecated removed api changes from " + fromVersion;
-        Map<String, Object> filters = new LinkedHashMap<>();
-        filters.put("sourceType", "SPRING_RELEASE_NOTE");
-        filters.put("library", "spring-boot");
-        filters.put("version", List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps"));
-        logger.debug("RAG search deprecations query='{}' filters={} topK={}", query, filters, RELEASE_NOTES_TOP_K);
-        List<RagHit> hits = ragSearchClient.search(query, filters, RELEASE_NOTES_TOP_K);
-        logger.debug("RAG search deprecations hits={}", hits == null ? 0 : hits.size());
-        return hits;
+        List<String> versionFilters = List.of("upgrading", "2.6.x", "2.7.x", "2.7.x-deps");
+
+        Map<String, Object> strictFilters = new LinkedHashMap<>();
+        strictFilters.put("sourceType", "SPRING_RELEASE_NOTE");
+        strictFilters.put("library", "spring-boot");
+        strictFilters.put("version", versionFilters);
+        strictFilters.put("docKind", "SPRING_RELEASE_NOTE");
+        List<RagHit> hits = ragSearchClient.search(query, strictFilters, RELEASE_NOTES_TOP_K);
+        int hitCount = hits == null ? 0 : hits.size();
+        logger.debug("RAG search deprecations passUsed=A query='{}' filters={} hits={}", query, strictFilters, hitCount);
+        if (hitCount > 0) {
+            return hits;
+        }
+
+        Map<String, Object> relaxedFilters = new LinkedHashMap<>();
+        relaxedFilters.put("sourceType", "SPRING_RELEASE_NOTE");
+        relaxedFilters.put("library", "spring-boot");
+        List<RagHit> relaxedHits = ragSearchClient.search(query, relaxedFilters, RELEASE_NOTES_TOP_K);
+        int relaxedHitCount = relaxedHits == null ? 0 : relaxedHits.size();
+        logger.debug("RAG search deprecations passUsed=B query='{}' filters={} hits={}", query, relaxedFilters,
+                relaxedHitCount);
+        if (relaxedHitCount > 0) {
+            return relaxedHits;
+        }
+
+        Map<String, Object> lookupFilters = new LinkedHashMap<>();
+        lookupFilters.put("sourceType", "SPRING_RELEASE_NOTE");
+        lookupFilters.put("library", "spring-boot");
+        lookupFilters.put("version", versionFilters);
+        List<RagHit> lookupHits = ragLookupClient.lookup(lookupFilters, DEPRECATION_LOOKUP_LIMIT);
+        List<RagHit> filteredHits = lookupHits == null
+                ? List.of()
+                : lookupHits.stream()
+                        .filter(hit -> hit != null && hit.text() != null
+                                && DEPRECATION_PATTERN.matcher(hit.text()).find())
+                        .limit(RELEASE_NOTES_TOP_K)
+                        .toList();
+        logger.debug("RAG lookup deprecations passUsed=C query='lookup' filters={} hits={}", lookupFilters,
+                filteredHits.size());
+        return filteredHits;
     }
 
     private List<RagHit> retrieveSpringSourceSnippets(List<RagHit> projectFacts, String toVersion) {
