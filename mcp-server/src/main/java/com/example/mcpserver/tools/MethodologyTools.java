@@ -2,8 +2,6 @@ package com.example.mcpserver.tools;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
@@ -18,8 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class MethodologyTools {
-
-    private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*?\\}", Pattern.MULTILINE);
 
     private final MethodologyService methodologyService;
     private final ObjectMapper objectMapper;
@@ -52,10 +48,22 @@ public class MethodologyTools {
         if (content == null) {
             return "";
         }
-        Matcher matcher = JSON_BLOCK.matcher(content);
-        if (matcher.find()) {
-            return matcher.group();
+        int start = content.indexOf('{');
+        if (start < 0) {
+            return content.trim();
         }
-        return content;
+        int depth = 0;
+        for (int i = start; i < content.length(); i++) {
+            char current = content.charAt(i);
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return content.substring(start, i + 1);
+                }
+            }
+        }
+        return content.substring(start).trim();
     }
 }
