@@ -54,6 +54,7 @@ public class RagLookupClient {
     }
 
     private List<RagHit> parseResponse(String payload) {
+        int rawLength = payload == null ? 0 : payload.length();
         try {
             if (!StringUtils.hasText(payload)) {
                 throw new IllegalStateException("rag.lookup response must be JSON array");
@@ -61,11 +62,25 @@ public class RagLookupClient {
             JsonNode root = objectMapper.readTree(payload);
             NormalizedResponse normalized = normalizeResponse(root);
             if (!normalized.hits().isArray()) {
-                throw new IllegalStateException("rag.lookup response must be JSON array");
+                throw new IllegalStateException("rag.lookup response must be JSON array: " + payloadExcerpt(payload));
             }
             List<RagHit> hits = objectMapper.convertValue(normalized.hits(), new TypeReference<>() {
             });
-            LOGGER.debug("rag.lookup response format={} hits={}", normalized.format(), hits.size());
+            boolean selfHealApplied = false;
+            JsonNode validationNode = normalized.hits();
+            String validationPayload = payload;
+            if (hits.size() == 1 && hits.get(0).metadata() == null && looksLikeJsonArray(hits.get(0).text())) {
+                String innerPayload = hits.get(0).text();
+                JsonNode healedNode = parseStringArray(innerPayload);
+                hits = objectMapper.convertValue(healedNode, new TypeReference<>() {
+                });
+                selfHealApplied = true;
+                validationNode = healedNode;
+                validationPayload = innerPayload;
+            }
+            validateHits(validationNode, validationPayload);
+            LOGGER.debug("rag.lookup response rawLength={} format={} selfHealApplied={} hits={}",
+                    rawLength, normalized.format(), selfHealApplied, hits.size());
             return hits;
         } catch (IllegalStateException ex) {
             throw ex;
@@ -110,19 +125,62 @@ public class RagLookupClient {
 
     private JsonNode parseStringArray(String payload) {
         if (!StringUtils.hasText(payload)) {
-            throw new IllegalStateException("rag.lookup response must be JSON array");
+            throw new IllegalStateException("rag.lookup response must be JSON array: " + payloadExcerpt(payload));
         }
         try {
             JsonNode parsed = objectMapper.readTree(payload);
             if (!parsed.isArray()) {
-                throw new IllegalStateException("rag.lookup response must be JSON array");
+                throw new IllegalStateException("rag.lookup response must be JSON array: " + payloadExcerpt(payload));
             }
             return parsed;
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new IllegalStateException("rag.lookup response must be JSON array", ex);
+            throw new IllegalStateException("rag.lookup response must be JSON array: " + payloadExcerpt(payload), ex);
         }
+    }
+
+    private void validateHits(JsonNode hitsNode, String payload) {
+        if (!hitsNode.isArray()) {
+            throw new IllegalStateException("Invalid rag.lookup contract: expected array. Payload excerpt: "
+                    + payloadExcerpt(payload));
+        }
+        for (JsonNode hit : hitsNode) {
+            if (!hit.isObject()) {
+                throw new IllegalStateException("Invalid rag.lookup contract: hit must be object. Payload excerpt: "
+                        + payloadExcerpt(payload));
+            }
+            JsonNode text = hit.get("text");
+            JsonNode score = hit.get("score");
+            JsonNode metadata = hit.get("metadata");
+            if (text == null || !text.isTextual()
+                    || score == null || !score.isNumber()
+                    || metadata == null || !(metadata.isObject() || metadata.isNull())) {
+                throw new IllegalStateException(
+                        "Invalid rag.lookup contract: each hit requires text(string), score(number), metadata(object|null). Payload excerpt: "
+                                + payloadExcerpt(payload));
+            }
+        }
+    }
+
+    private boolean looksLikeJsonArray(String payload) {
+        if (!StringUtils.hasText(payload)) {
+            return false;
+        }
+        String trimmed = payload.trim();
+        return trimmed.startsWith("[") && trimmed.endsWith("]");
+    }
+
+    private String payloadExcerpt(String payload) {
+        if (payload == null) {
+            return "null";
+        }
+        String trimmed = payload.trim();
+        int maxLength = 200;
+        if (trimmed.length() <= maxLength) {
+            return trimmed;
+        }
+        return trimmed.substring(0, maxLength) + "...";
     }
 
     private record NormalizedResponse(String format, JsonNode hits) {
