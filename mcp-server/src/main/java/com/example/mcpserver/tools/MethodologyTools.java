@@ -5,6 +5,8 @@ import java.util.List;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.example.mcpserver.dto.MethodologyRulesResponse;
 import com.example.mcpserver.dto.UpgradeReport;
@@ -17,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class MethodologyTools {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MethodologyTools.class);
     private final MethodologyService methodologyService;
     private final ObjectMapper objectMapper;
 
@@ -38,10 +41,17 @@ public class MethodologyTools {
     }
 
     @Tool(name = "methodology.writeReport", description = "Nettoie et reformate un UpgradeReport en JSON")
-    public String writeReport(String content) throws IOException {
+    public UpgradeReport writeReport(String content) throws IOException {
         String json = extractJson(content);
-        UpgradeReport report = objectMapper.readValue(json, UpgradeReport.class);
-        return objectMapper.writeValueAsString(report);
+        if (json == null || json.isBlank()) {
+            LOGGER.warn("methodology.writeReport: extracted JSON is empty.");
+        }
+        try {
+            return objectMapper.readValue(json, UpgradeReport.class);
+        } catch (IOException exception) {
+            LOGGER.warn("methodology.writeReport: failed to parse UpgradeReport JSON.", exception);
+            throw exception;
+        }
     }
 
     private String extractJson(String content) {
