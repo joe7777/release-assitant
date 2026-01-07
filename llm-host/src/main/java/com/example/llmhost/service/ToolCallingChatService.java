@@ -17,6 +17,7 @@ import com.example.llmhost.config.AppProperties;
 import com.example.llmhost.config.AppProperties.ToolingProperties;
 import com.example.llmhost.config.SystemPromptProvider;
 import com.example.llmhost.model.UpgradeReport;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -216,7 +217,49 @@ public class ToolCallingChatService {
                 .toList();
     }
 
-    private String extractFirstJson(String content) {
+    private String extractJsonPayload(String content) {
+        if (content == null) {
+            LOGGER.debug("Detected JSON payload format: legacy (content=null)");
+            return null;
+        }
+        String trimmed = content.trim();
+        if (trimmed.isEmpty()) {
+            LOGGER.debug("Detected JSON payload format: legacy (content=empty)");
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(trimmed);
+            if (node.isObject()) {
+                LOGGER.debug("Detected JSON payload format: object");
+                return objectMapper.writeValueAsString(node);
+            }
+            if (node.isArray()) {
+                if (node.size() > 0) {
+                    JsonNode first = node.get(0);
+                    JsonNode textNode = first.get("text");
+                    if (textNode != null && textNode.isTextual()) {
+                        try {
+                            JsonNode innerNode = objectMapper.readTree(textNode.asText());
+                            if (innerNode.isObject()) {
+                                LOGGER.debug("Detected JSON payload format: array.text");
+                                return objectMapper.writeValueAsString(innerNode);
+                            }
+                        } catch (Exception innerEx) {
+                            LOGGER.debug("Failed to parse array.text JSON payload, falling back to array serialization");
+                        }
+                    }
+                }
+                LOGGER.debug("Detected JSON payload format: array");
+                return objectMapper.writeValueAsString(node);
+            }
+        } catch (Exception ex) {
+            LOGGER.debug("Failed to parse JSON payload directly, falling back to legacy extraction");
+        }
+        LOGGER.debug("Detected JSON payload format: legacy");
+        return extractFirstJsonLegacy(content);
+    }
+
+    private String extractFirstJsonLegacy(String content) {
         if (content == null) {
             LOGGER.debug("No JSON object found in content length=0");
             return null;
@@ -262,16 +305,22 @@ public class ToolCallingChatService {
     }
 
     private ValidationResult validateAndRepairReport(String content) {
-        String json = extractFirstJson(content);
+        String json = extractJsonPayload(content);
         UpgradeReport report = parseReport(json);
         if (report != null) {
             return new ValidationResult(content, json, report);
         }
+        if (StringUtils.hasText(json)) {
+            LOGGER.debug("Failed to parse UpgradeReport from extracted JSON (length={})", json.length());
+        }
         String repairedContent = requestJsonRepair(content);
-        String repairedJson = extractFirstJson(repairedContent);
+        String repairedJson = extractJsonPayload(repairedContent);
         UpgradeReport repairedReport = parseReport(repairedJson);
         if (repairedReport != null) {
             return new ValidationResult(repairedContent, repairedJson, repairedReport);
+        }
+        if (StringUtils.hasText(repairedJson)) {
+            LOGGER.debug("Failed to parse UpgradeReport from repaired JSON (length={})", repairedJson.length());
         }
         return new ValidationResult(content, json, null);
     }
@@ -289,7 +338,9 @@ public class ToolCallingChatService {
 
     private String requestJsonRepair(String content) {
         String prompt = "Répare ce JSON afin qu'il soit valide et conforme au contrat UpgradeReport. "
-                + "Retourne uniquement le JSON corrigé.\n"
+                + "Retourne uniquement l'objet JSON corrigé, sans wrapper tableau ni champ \"text\". "
+                + "N'utilise jamais ```json``` ni markdown. "
+                + "Si l'entrée est un tableau [{\"text\":\"{...}\"}], extrais le JSON interne et retourne uniquement l'objet JSON.\n"
                 + systemPromptProvider.upgradeReportContract()
                 + "\nJSON/texte:\n" + content;
         return chatClient.prompt()

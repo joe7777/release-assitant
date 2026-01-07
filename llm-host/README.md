@@ -71,3 +71,21 @@ curl http://localhost:8082/debug/tools
 ```
 
 La réponse contient `name` + `description` pour chaque tool, afin de confirmer que `rag.search` est bien exposé.
+
+### Validation manuelle /chat (GUIDED)
+
+```bash
+curl -X POST http://localhost:8082/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "GUIDED",
+    "prompt": "Génère un UpgradeReport JSON strict.",
+    "workspaceId": "demo",
+    "repoUrl": "https://github.com/example/repo",
+    "fromVersion": "1.0.0",
+    "toVersion": "2.0.0",
+    "moduleFocus": ["web"]
+  }'
+```
+
+Vérifier que `output` est un objet JSON (pas un tableau ni un wrapper `{ "text": ... }`).
