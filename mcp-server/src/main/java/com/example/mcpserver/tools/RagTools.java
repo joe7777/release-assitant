@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import com.example.mcpserver.dto.ApiChangeBatchRequest;
 import com.example.mcpserver.dto.ApiChangeBatchResponse;
@@ -110,7 +111,7 @@ public class RagTools {
     }
 
     @Tool(name = "rag.findApiChangesBatch", description = "Compare des changements API via RAG entre deux versions pour une liste de symboles")
-    public ApiChangeBatchResponse findApiChangesBatch(Map<String, Object> requestPayload) {
+    public ApiChangeBatchResponse findApiChangesBatch(String requestPayload) {
         long startTime = System.nanoTime();
         int requestedSymbols = 0;
         int processedSymbols = 0;
@@ -180,17 +181,17 @@ public class RagTools {
         }
     }
 
-    private ApiChangeBatchRequest parseBatchRequest(Map<String, Object> requestPayload) {
-        if (requestPayload == null || requestPayload.isEmpty()) {
+    private ApiChangeBatchRequest parseBatchRequest(String requestPayload) {
+        if (!StringUtils.hasText(requestPayload)) {
             throw new IllegalArgumentException("request is required");
         }
         try {
-            ApiChangeBatchRequest request = objectMapper.convertValue(requestPayload, ApiChangeBatchRequest.class);
+            ApiChangeBatchRequest request = objectMapper.readValue(requestPayload, ApiChangeBatchRequest.class);
             if (request == null) {
                 throw new IllegalArgumentException("request is required");
             }
             return request;
-        } catch (IllegalArgumentException ex) {
+        } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("request must be valid JSON", ex);
         }
     }
