@@ -131,22 +131,22 @@ public class RagTools {
             }
             requestedSymbols = request.symbols().size();
 
-            int topKPerSymbol = request.topKPerSymbol() == null ? 3 : request.topKPerSymbol();
-            int maxSymbols = request.maxSymbols() == null ? 500 : request.maxSymbols();
-            boolean dedupe = request.dedupe() == null || request.dedupe();
+            int resolvedTopKPerSymbol = request.topKPerSymbol() == null ? 3 : request.topKPerSymbol();
+            int resolvedMaxSymbols = request.maxSymbols() == null ? 500 : request.maxSymbols();
+            boolean resolvedDedupe = request.dedupe() == null || request.dedupe();
 
             List<String> normalizedSymbols = new ArrayList<>(request.symbols());
             if (normalizedSymbols.contains(null)) {
                 throw new IllegalArgumentException("symbols must not contain null values");
             }
 
-            List<String> finalSymbols = dedupe
+            List<String> finalSymbols = resolvedDedupe
                     ? new ArrayList<>(new LinkedHashSet<>(normalizedSymbols))
                     : normalizedSymbols;
             uniqueSymbols = finalSymbols.size();
 
-            if (finalSymbols.size() > maxSymbols) {
-                finalSymbols = finalSymbols.subList(0, maxSymbols);
+            if (finalSymbols.size() > resolvedMaxSymbols) {
+                finalSymbols = finalSymbols.subList(0, resolvedMaxSymbols);
                 truncated = true;
             }
             processedSymbols = finalSymbols.size();
@@ -154,7 +154,7 @@ public class RagTools {
             List<SymbolChanges> results = new ArrayList<>(finalSymbols.size());
             for (String symbol : finalSymbols) {
                 ApiChangeResponse response = springApiChangeService.findApiChanges(symbol, request.fromVersion(),
-                        request.toVersion(), topKPerSymbol);
+                        request.toVersion(), resolvedTopKPerSymbol);
                 List<RagSearchResult> hits = new ArrayList<>();
                 if (response != null) {
                     if (response.fromMatches() != null) {
@@ -168,7 +168,7 @@ public class RagTools {
             }
 
             return new ApiChangeBatchResponse(request.fromVersion(), request.toVersion(), requestedSymbols,
-                    processedSymbols, truncated, maxSymbols, results);
+                    processedSymbols, truncated, resolvedMaxSymbols, results);
         } finally {
             long durationMs = (System.nanoTime() - startTime) / 1_000_000;
             LOGGER.debug(
