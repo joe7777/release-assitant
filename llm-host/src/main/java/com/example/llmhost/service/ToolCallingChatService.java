@@ -170,6 +170,9 @@ public class ToolCallingChatService {
         StringBuilder builder = new StringBuilder();
         builder.append("Réponds uniquement avec un JSON valide conforme au contrat UpgradeReport.\n");
         builder.append("N'utilise jamais ```json``` ni markdown, retourne uniquement un objet JSON.\n");
+        builder.append("Chaque impact doit inclure evidence=[S#] présents dans SOURCES.\n");
+        builder.append("Inclure l'URL dans recommendation quand disponible (metadata.url).\n");
+        builder.append("Ne pas utiliser de markdown.\n");
         builder.append(systemPromptProvider.upgradeReportContract()).append("\n");
         builder.append("SOURCES AUTORISÉES: ").append(buildAllowedSources(context.hits().size())).append("\n");
         builder.append("Project attendu: repoUrl=").append(request.repoUrl())
