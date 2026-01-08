@@ -110,15 +110,16 @@ public class RagTools {
     }
 
     @Tool(name = "rag.findApiChangesBatch", description = "Compare des changements API via RAG entre deux versions pour une liste de symboles")
-    public ApiChangeBatchResponse findApiChangesBatch(ApiChangeBatchRequest request) {
+    public ApiChangeBatchResponse findApiChangesBatch(List<String> symbols, String fromVersion, String toVersion,
+            Integer topKPerSymbol, Integer maxSymbols, Boolean dedupe) {
         long startTime = System.nanoTime();
         int requestedSymbols = 0;
+        int uniqueSymbols = 0;
         int processedSymbols = 0;
         boolean truncated = false;
         try {
-            if (request == null) {
-                throw new IllegalArgumentException("request is required");
-            }
+            ApiChangeBatchRequest request = new ApiChangeBatchRequest(symbols, fromVersion, toVersion, topKPerSymbol,
+                    maxSymbols, dedupe);
             if (request.symbols() == null || request.symbols().isEmpty()) {
                 throw new IllegalArgumentException("symbols must not be empty");
             }
@@ -134,30 +135,24 @@ public class RagTools {
             int maxSymbols = request.maxSymbols() == null ? 500 : request.maxSymbols();
             boolean dedupe = request.dedupe() == null || request.dedupe();
 
-            List<String> normalizedSymbols = new ArrayList<>(request.symbols().size());
-            for (String symbol : request.symbols()) {
-                if (symbol == null) {
-                    throw new IllegalArgumentException("symbols must not contain null values");
-                }
-                String trimmed = symbol.trim();
-                if (trimmed.isEmpty()) {
-                    throw new IllegalArgumentException("symbols must not contain blank values");
-                }
-                normalizedSymbols.add(trimmed);
+            List<String> normalizedSymbols = new ArrayList<>(request.symbols());
+            if (normalizedSymbols.contains(null)) {
+                throw new IllegalArgumentException("symbols must not contain null values");
             }
 
-            List<String> symbols = dedupe
+            List<String> finalSymbols = dedupe
                     ? new ArrayList<>(new LinkedHashSet<>(normalizedSymbols))
                     : normalizedSymbols;
+            uniqueSymbols = finalSymbols.size();
 
-            if (symbols.size() > maxSymbols) {
-                symbols = symbols.subList(0, maxSymbols);
+            if (finalSymbols.size() > maxSymbols) {
+                finalSymbols = finalSymbols.subList(0, maxSymbols);
                 truncated = true;
             }
-            processedSymbols = symbols.size();
+            processedSymbols = finalSymbols.size();
 
-            List<SymbolChanges> results = new ArrayList<>(symbols.size());
-            for (String symbol : symbols) {
+            List<SymbolChanges> results = new ArrayList<>(finalSymbols.size());
+            for (String symbol : finalSymbols) {
                 ApiChangeResponse response = springApiChangeService.findApiChanges(symbol, request.fromVersion(),
                         request.toVersion(), topKPerSymbol);
                 List<RagSearchResult> hits = new ArrayList<>();
@@ -177,8 +172,8 @@ public class RagTools {
         } finally {
             long durationMs = (System.nanoTime() - startTime) / 1_000_000;
             LOGGER.debug(
-                    "rag.findApiChangesBatch requestedSymbols={}, processedSymbols={}, truncated={}, durationMs={}",
-                    requestedSymbols, processedSymbols, truncated, durationMs);
+                    "rag.findApiChangesBatch requestedSymbols={}, uniqueSymbols={}, processedSymbols={}, truncated={}, durationMs={}",
+                    requestedSymbols, uniqueSymbols, processedSymbols, truncated, durationMs);
         }
     }
 
