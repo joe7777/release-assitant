@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import com.example.mcpserver.dto.ApiChangeBatchRequest;
 import com.example.mcpserver.dto.ApiChangeBatchResponse;
@@ -111,13 +110,15 @@ public class RagTools {
     }
 
     @Tool(name = "rag.findApiChangesBatch", description = "Compare des changements API via RAG entre deux versions pour une liste de symboles")
-    public ApiChangeBatchResponse findApiChangesBatch(String requestPayload) {
+    public ApiChangeBatchResponse findApiChangesBatch(ApiChangeBatchRequest request) {
         long startTime = System.nanoTime();
         int requestedSymbols = 0;
         int processedSymbols = 0;
         boolean truncated = false;
         try {
-            ApiChangeBatchRequest request = parseBatchRequest(requestPayload);
+            if (request == null) {
+                throw new IllegalArgumentException("request is required");
+            }
             if (request.symbols() == null || request.symbols().isEmpty()) {
                 throw new IllegalArgumentException("symbols must not be empty");
             }
@@ -178,21 +179,6 @@ public class RagTools {
             LOGGER.debug(
                     "rag.findApiChangesBatch requestedSymbols={}, processedSymbols={}, truncated={}, durationMs={}",
                     requestedSymbols, processedSymbols, truncated, durationMs);
-        }
-    }
-
-    private ApiChangeBatchRequest parseBatchRequest(String requestPayload) {
-        if (!StringUtils.hasText(requestPayload)) {
-            throw new IllegalArgumentException("request is required");
-        }
-        try {
-            ApiChangeBatchRequest request = objectMapper.readValue(requestPayload, ApiChangeBatchRequest.class);
-            if (request == null) {
-                throw new IllegalArgumentException("request is required");
-            }
-            return request;
-        } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("request must be valid JSON", ex);
         }
     }
 
