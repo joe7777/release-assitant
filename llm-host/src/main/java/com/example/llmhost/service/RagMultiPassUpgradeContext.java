@@ -3,15 +3,21 @@ package com.example.llmhost.service;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.example.llmhost.config.AppProperties;
+import com.example.llmhost.rag.ApiChangeBatchResponse;
+import com.example.llmhost.rag.RagApiChangeBatchClient;
 import com.example.llmhost.rag.RagHit;
 import com.example.llmhost.rag.RagLookupClient;
 import com.example.llmhost.rag.RagSearchClient;
+import com.example.llmhost.rag.SymbolChanges;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -33,19 +39,35 @@ public class RagMultiPassUpgradeContext {
     private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
     private static final int DEPRECATION_LOOKUP_LIMIT = 50;
+    private static final int PROJECT_FACT_SYMBOL_LOOKUP_LIMIT = 100;
+    private static final int API_CHANGES_TOP_K_PER_SYMBOL = 3;
+    private static final int API_CHANGES_MAX_SYMBOLS = 500;
     private static final Pattern DEPRECATION_PATTERN =
             Pattern.compile("(?i)\\b(deprecat|deprecated|deprecation|removed|removal|breaking)\\b");
+    private static final Pattern FQCN_PATTERN = Pattern.compile(
+            "\\b[A-Za-z_][A-Za-z0-9_$.]*\\.[A-Za-z0-9_$.]+\\b");
+    private static final List<String> WEB_SYMBOL_MARKERS = List.of(
+            ".web.",
+            ".webmvc.",
+            ".webflux.",
+            ".servlet.",
+            ".tomcat.",
+            ".web.bind."
+    );
 
     private final RagSearchClient ragSearchClient;
     private final RagLookupClient ragLookupClient;
+    private final RagApiChangeBatchClient ragApiChangeBatchClient;
     private final RagContextBuilder ragContextBuilder;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
     public RagMultiPassUpgradeContext(RagSearchClient ragSearchClient, RagLookupClient ragLookupClient,
-            RagContextBuilder ragContextBuilder, AppProperties appProperties, ObjectMapper objectMapper) {
+            RagApiChangeBatchClient ragApiChangeBatchClient, RagContextBuilder ragContextBuilder,
+            AppProperties appProperties, ObjectMapper objectMapper) {
         this.ragSearchClient = ragSearchClient;
         this.ragLookupClient = ragLookupClient;
+        this.ragApiChangeBatchClient = ragApiChangeBatchClient;
         this.ragContextBuilder = ragContextBuilder;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
@@ -55,11 +77,12 @@ public class RagMultiPassUpgradeContext {
         List<RagHit> projectFacts = retrieveProjectFacts(workspaceId, List.of());
         List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, List.of());
         List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, List.of());
+        List<RagHit> apiChangeHits = retrieveApiChangeBatchHits(fromVersion, toVersion, workspaceId, List.of());
         List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
                 ? retrieveSpringSourceSnippets(projectFacts, toVersion)
                 : List.of();
 
-        List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits, sourceCodeHits);
+        List<RagHit> merged = mergeHits(projectFacts, apiChangeHits, migrationHits, deprecationHits, sourceCodeHits);
         String contextText = ragContextBuilder.buildContext(merged, 6000, MAX_PROJECT_FACT_CHARS);
         return new UpgradeContext(merged, contextText);
     }
@@ -71,11 +94,12 @@ public class RagMultiPassUpgradeContext {
         List<RagHit> projectFacts = retrieveProjectFacts(workspaceId, normalizedFocus);
         List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, normalizedFocus);
         List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, normalizedFocus);
+        List<RagHit> apiChangeHits = retrieveApiChangeBatchHits(fromVersion, toVersion, workspaceId, normalizedFocus);
         List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
                 ? retrieveSpringSourceSnippets(projectFacts, toVersion)
                 : List.of();
 
-        List<RagHit> merged = mergeHits(projectFacts, migrationHits, deprecationHits, sourceCodeHits);
+        List<RagHit> merged = mergeHits(projectFacts, apiChangeHits, migrationHits, deprecationHits, sourceCodeHits);
         String contextText = ragContextBuilder.buildContext(merged, 6000, MAX_PROJECT_FACT_CHARS);
         return new UpgradeContext(merged, contextText);
     }
@@ -99,6 +123,108 @@ public class RagMultiPassUpgradeContext {
                 FocusKeywords.includeKeywords(moduleFocus), FocusKeywords.excludeKeywords(moduleFocus));
         List<RagHit> filtered = postFilterHits(hits, moduleFocus, topK, "projectFacts");
         return filtered.isEmpty() ? hits : filtered;
+    }
+
+    private List<RagHit> retrieveApiChangeBatchHits(String fromVersion, String toVersion, String workspaceId,
+            List<String> moduleFocus) {
+        List<RagHit> projectFacts = retrieveProjectFactsForSymbols(workspaceId);
+        SymbolExtractionResult extraction = extractSymbols(projectFacts, moduleFocus, API_CHANGES_MAX_SYMBOLS);
+        logger.debug("API change symbols unique={} maxSymbols={} truncated={}",
+                extraction.symbols().size(), API_CHANGES_MAX_SYMBOLS, extraction.truncated());
+        if (extraction.symbols().isEmpty()) {
+            logger.info("Aucun symbole détecté pour l'appel batch rag.findApiChangesBatch.");
+            return List.of();
+        }
+        ApiChangeBatchResponse response = ragApiChangeBatchClient.findBatch(
+                extraction.symbols(),
+                fromVersion,
+                toVersion,
+                API_CHANGES_TOP_K_PER_SYMBOL,
+                API_CHANGES_MAX_SYMBOLS
+        );
+        List<RagHit> batchHits = flattenApiChangeHits(response);
+        logger.debug("API change batch response processedSymbols={} truncated={} maxSymbols={} hitsTotal={}",
+                response == null ? 0 : response.processedSymbols(),
+                response != null && response.truncated(),
+                response == null ? 0 : response.maxSymbols(),
+                batchHits.size());
+        return batchHits;
+    }
+
+    private List<RagHit> retrieveProjectFactsForSymbols(String workspaceId) {
+        Map<String, Object> filters = new LinkedHashMap<>();
+        filters.put("sourceType", "PROJECT_FACT");
+        filters.put("workspaceId", workspaceId);
+        filters.put("docKind", "PROJECT_FACT");
+        List<RagHit> hits = ragLookupClient.lookup(filters, PROJECT_FACT_SYMBOL_LOOKUP_LIMIT);
+        logger.debug("PROJECT_FACT hits retrieved for symbols={} for workspaceId={}",
+                hits == null ? 0 : hits.size(), workspaceId);
+        return hits == null ? List.of() : hits;
+    }
+
+    private SymbolExtractionResult extractSymbols(List<RagHit> projectFacts, List<String> moduleFocus,
+            int maxSymbols) {
+        Set<String> symbols = new LinkedHashSet<>();
+        if (projectFacts != null) {
+            for (RagHit hit : projectFacts) {
+                if (hit == null || hit.text() == null) {
+                    continue;
+                }
+                Matcher matcher = FQCN_PATTERN.matcher(hit.text());
+                while (matcher.find()) {
+                    String symbol = matcher.group(0);
+                    if (symbol != null && !symbol.isBlank()) {
+                        symbols.add(symbol);
+                    }
+                }
+            }
+        }
+        List<String> orderedSymbols = new ArrayList<>(symbols);
+        if (moduleFocus != null && moduleFocus.stream().anyMatch("web"::equalsIgnoreCase)) {
+            orderedSymbols = orderedSymbols.stream()
+                    .filter(this::isWebFocusedSymbol)
+                    .toList();
+        }
+        boolean truncated = orderedSymbols.size() > maxSymbols;
+        if (truncated) {
+            orderedSymbols = orderedSymbols.subList(0, maxSymbols);
+        }
+        return new SymbolExtractionResult(orderedSymbols, truncated);
+    }
+
+    private boolean isWebFocusedSymbol(String symbol) {
+        for (String marker : WEB_SYMBOL_MARKERS) {
+            if (symbol.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<RagHit> flattenApiChangeHits(ApiChangeBatchResponse response) {
+        if (response == null || response.results() == null || response.results().isEmpty()) {
+            return List.of();
+        }
+        List<RagHit> hits = new ArrayList<>();
+        for (SymbolChanges changes : response.results()) {
+            if (changes == null || changes.hits() == null) {
+                continue;
+            }
+            for (RagHit hit : changes.hits()) {
+                if (hit == null) {
+                    continue;
+                }
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                if (hit.metadata() != null) {
+                    metadata.putAll(hit.metadata());
+                }
+                if (changes.symbol() != null) {
+                    metadata.put("symbol", changes.symbol());
+                }
+                hits.add(new RagHit(hit.text(), hit.score(), metadata));
+            }
+        }
+        return hits;
     }
 
     private List<RagHit> retrieveMigrationGuide(String fromVersion, String toVersion, List<String> moduleFocus) {
@@ -383,8 +509,8 @@ public class RagMultiPassUpgradeContext {
         }
     }
 
-    private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> migrationHits,
-            List<RagHit> deprecationHits, List<RagHit> sourceCodeHits) {
+    private List<RagHit> mergeHits(List<RagHit> projectFacts, List<RagHit> apiChangeHits,
+            List<RagHit> migrationHits, List<RagHit> deprecationHits, List<RagHit> sourceCodeHits) {
         List<RagHit> merged = new ArrayList<>();
         Map<String, RagHit> unique = new LinkedHashMap<>();
         if (projectFacts != null && !projectFacts.isEmpty()) {
@@ -399,6 +525,7 @@ public class RagMultiPassUpgradeContext {
             }
         }
         Map<String, RagHit> remaining = new LinkedHashMap<>();
+        appendUnique(remaining, apiChangeHits);
         appendUnique(remaining, migrationHits);
         appendUnique(remaining, deprecationHits);
         appendUnique(remaining, sourceCodeHits);
@@ -438,5 +565,8 @@ public class RagMultiPassUpgradeContext {
             return String.valueOf(hit);
         }
         return String.valueOf(documentKey) + "::" + String.valueOf(chunkIndex);
+    }
+
+    private record SymbolExtractionResult(List<String> symbols, boolean truncated) {
     }
 }
