@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -33,8 +34,8 @@ public class RagMultiPassUpgradeContext {
     private static final int FOCUSED_RELEASE_NOTES_TOP_K = 10;
     private static final int FOCUSED_SEARCH_MULTIPLIER = 3;
     private static final int MAX_HITS = 12;
-    private static final int PROJECT_FACT_TOP_K = 5;
-    private static final int FOCUSED_PROJECT_FACT_TOP_K = 8;
+    private static final int PROJECT_FACT_TOP_K = 50;
+    private static final int FOCUSED_PROJECT_FACT_TOP_K = 100;
     private static final int MAX_PROJECT_FACT_CHARS = 1500;
     private static final int MAX_PROJECT_FACT_CHUNKS = 3;
     private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
@@ -45,15 +46,19 @@ public class RagMultiPassUpgradeContext {
     private static final Pattern DEPRECATION_PATTERN =
             Pattern.compile("(?i)\\b(deprecat|deprecated|deprecation|removed|removal|breaking)\\b");
     private static final Pattern FQCN_PATTERN = Pattern.compile(
-            "\\b[A-Za-z_][A-Za-z0-9_$.]*\\.[A-Za-z0-9_$.]+\\b");
+            "([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+\\.[A-Z][\\w$]*)");
     private static final List<String> WEB_SYMBOL_MARKERS = List.of(
             ".web.",
             ".webmvc.",
             ".webflux.",
             ".servlet.",
             ".tomcat.",
-            ".web.bind."
+            ".web.bind.",
+            ".mvc."
     );
+    private static final List<String> DATA_SYMBOL_MARKERS = List.of(".data.", ".jdbc.", ".jpa.");
+    private static final String DOC_CONTENT_KEY = "doc_content";
+    private static final String DOCUMENT_KEY = "documentKey";
 
     private final RagSearchClient ragSearchClient;
     private final RagLookupClient ragLookupClient;
@@ -89,12 +94,11 @@ public class RagMultiPassUpgradeContext {
 
     public UpgradeContext retrieve(String fromVersion, String toVersion, String workspaceId, String repoUrl,
             List<String> moduleFocus) {
-        List<String> normalizedFocus = FocusKeywords.normalize(moduleFocus);
-        logger.debug("moduleFocus received={} normalized={}", moduleFocus, normalizedFocus);
-        List<RagHit> projectFacts = retrieveProjectFacts(workspaceId, normalizedFocus);
-        List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, normalizedFocus);
-        List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, normalizedFocus);
-        List<RagHit> apiChangeHits = retrieveApiChangeBatchHits(fromVersion, toVersion, workspaceId, normalizedFocus);
+        logger.debug("moduleFocus received={}", moduleFocus);
+        List<RagHit> projectFacts = retrieveProjectFacts(workspaceId, moduleFocus);
+        List<RagHit> migrationHits = retrieveMigrationGuide(fromVersion, toVersion, moduleFocus);
+        List<RagHit> deprecationHits = retrieveDeprecations(fromVersion, toVersion, moduleFocus);
+        List<RagHit> apiChangeHits = retrieveApiChangeBatchHits(fromVersion, toVersion, workspaceId, moduleFocus);
         List<RagHit> sourceCodeHits = appProperties.getRag().isEnableSourceCodePass()
                 ? retrieveSpringSourceSnippets(projectFacts, toVersion)
                 : List.of();
@@ -121,7 +125,9 @@ public class RagMultiPassUpgradeContext {
         }
         logger.debug("Project facts focus includeKeywords={} excludeKeywords={}",
                 FocusKeywords.includeKeywords(moduleFocus), FocusKeywords.excludeKeywords(moduleFocus));
-        List<RagHit> filtered = postFilterHits(hits, moduleFocus, topK, "projectFacts");
+        List<RagHit> filtered = hits.stream()
+                .filter(hit -> shouldKeepHit(hit, moduleFocus))
+                .toList();
         return filtered.isEmpty() ? hits : filtered;
     }
 
@@ -164,27 +170,11 @@ public class RagMultiPassUpgradeContext {
 
     private SymbolExtractionResult extractSymbols(List<RagHit> projectFacts, List<String> moduleFocus,
             int maxSymbols) {
-        Set<String> symbols = new LinkedHashSet<>();
-        if (projectFacts != null) {
-            for (RagHit hit : projectFacts) {
-                if (hit == null || hit.text() == null) {
-                    continue;
-                }
-                Matcher matcher = FQCN_PATTERN.matcher(hit.text());
-                while (matcher.find()) {
-                    String symbol = matcher.group(0);
-                    if (symbol != null && !symbol.isBlank()) {
-                        symbols.add(symbol);
-                    }
-                }
-            }
-        }
-        List<String> orderedSymbols = new ArrayList<>(symbols);
-        if (moduleFocus != null && moduleFocus.stream().anyMatch("web"::equalsIgnoreCase)) {
-            orderedSymbols = orderedSymbols.stream()
-                    .filter(this::isWebFocusedSymbol)
-                    .toList();
-        }
+        List<String> orderedSymbols = extractSymbolsFromProjectFacts(projectFacts);
+        logger.debug("Project fact symbols extracted beforeFilter={} moduleFocus={}",
+                orderedSymbols.size(), moduleFocus);
+        orderedSymbols = applyModuleFocus(orderedSymbols, moduleFocus);
+        logger.debug("Project fact symbols extracted afterFilter={}", orderedSymbols.size());
         boolean truncated = orderedSymbols.size() > maxSymbols;
         if (truncated) {
             orderedSymbols = orderedSymbols.subList(0, maxSymbols);
@@ -192,8 +182,95 @@ public class RagMultiPassUpgradeContext {
         return new SymbolExtractionResult(orderedSymbols, truncated);
     }
 
-    private boolean isWebFocusedSymbol(String symbol) {
-        for (String marker : WEB_SYMBOL_MARKERS) {
+    private List<String> extractSymbolsFromProjectFacts(List<RagHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            logger.debug("PROJECT_FACT symbols extraction hits=0 uniqueDocumentKeys=0");
+            return List.of();
+        }
+        Map<String, String> docContentByKey = new LinkedHashMap<>();
+        int index = 0;
+        for (RagHit hit : hits) {
+            index++;
+            if (hit == null || hit.metadata() == null) {
+                continue;
+            }
+            Object docContentRaw = hit.metadata().get(DOC_CONTENT_KEY);
+            if (docContentRaw == null) {
+                continue;
+            }
+            String docContent = docContentRaw.toString();
+            if (docContent.isBlank()) {
+                continue;
+            }
+            Object docKeyRaw = hit.metadata().get(DOCUMENT_KEY);
+            String docKey = docKeyRaw == null ? "unknown-" + index : docKeyRaw.toString();
+            String current = docContentByKey.get(docKey);
+            if (current == null || docContent.length() > current.length()) {
+                docContentByKey.put(docKey, docContent);
+            }
+        }
+        logger.debug("PROJECT_FACT symbols extraction hits={} uniqueDocumentKeys={}", hits.size(),
+                docContentByKey.size());
+        Set<String> symbols = new LinkedHashSet<>();
+        for (String docContent : docContentByKey.values()) {
+            Matcher matcher = FQCN_PATTERN.matcher(docContent);
+            while (matcher.find()) {
+                String symbol = matcher.group(1);
+                if (symbol != null && !symbol.isBlank()) {
+                    symbols.add(symbol);
+                }
+            }
+        }
+        return new ArrayList<>(symbols);
+    }
+
+    private List<String> applyModuleFocus(List<String> symbols, List<String> moduleFocus) {
+        if (symbols == null || symbols.isEmpty()) {
+            return List.of();
+        }
+        if (moduleFocus == null || moduleFocus.isEmpty()) {
+            return symbols;
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String focus : moduleFocus) {
+            if (focus == null) {
+                continue;
+            }
+            String trimmed = focus.trim().toLowerCase(Locale.ROOT);
+            if (!trimmed.isBlank()) {
+                normalized.add(trimmed);
+            }
+        }
+        if (normalized.isEmpty()) {
+            return symbols;
+        }
+        boolean includeWeb = normalized.contains("web");
+        boolean includeSecurity = normalized.contains("security");
+        boolean includeData = normalized.contains("data");
+        if (!includeWeb && !includeSecurity && !includeData) {
+            return symbols;
+        }
+        List<String> filtered = symbols.stream()
+                .filter(symbol -> {
+                    String lowerSymbol = symbol.toLowerCase(Locale.ROOT);
+                    if (includeWeb && matchesAnyMarker(lowerSymbol, WEB_SYMBOL_MARKERS)) {
+                        return true;
+                    }
+                    if (includeSecurity && lowerSymbol.contains(".security.")) {
+                        return true;
+                    }
+                    return includeData && matchesAnyMarker(lowerSymbol, DATA_SYMBOL_MARKERS);
+                })
+                .toList();
+        if (filtered.isEmpty()) {
+            logger.warn("moduleFocus filter returned zero symbols, fallback to full symbol list");
+            return symbols;
+        }
+        return filtered;
+    }
+
+    private boolean matchesAnyMarker(String symbol, List<String> markers) {
+        for (String marker : markers) {
             if (symbol.contains(marker)) {
                 return true;
             }
