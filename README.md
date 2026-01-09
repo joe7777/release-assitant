@@ -73,6 +73,64 @@ sequenceDiagram
     activer de tool-calling LLM.
 - **Bases de données** : PostgreSQL pour l'état des analyses, Qdrant pour le RAG.
 
+## Architecture: GUIDED vs AUTO (Release Assistant)
+
+Le projet propose deux modes d’exécution pour générer un rapport d’upgrade (ex: Spring Boot 2.5 → 2.7).
+
+### Pourquoi 2 modes ?
+- **GUIDED** = mode “auditables / traçable / industrialisable” : le backend choisit les sources, numérote les preuves `[S#]`, et applique un **gating** qui supprime tout ce qui n’est pas justifié.
+- **AUTO** = mode “assistant outillé / exploratoire” : le LLM pilote l’exécution, choisit s’il appelle des tools, et produit une réponse plus libre (moins de garanties).
+
+---
+
+## Mode GUIDED (orchestration backend + evidence gating)
+
+**Objectif** : produire un rapport fiable, basé uniquement sur les sources récupérées par le backend.
+
+### Pipeline
+1. `llm-host` construit un contexte RAG déterministe (multi-pass) :
+   - PROJECT_FACT (inventaire Spring dans le code)
+   - Release notes / upgrading guide / dependency versions
+   - API changes (batch) via RAG
+2. `llm-host` fabrique `SOURCES` et numérote `[S1..Sn]`
+3. Le LLM répond **uniquement** avec un JSON `UpgradeReport` contenant `evidence=[S#]`
+4. **Evidence Gate** : supprime impacts/workpoints/unknowns dont les `evidence` ne sont pas autorisées
+5. (Optionnel) **Evidence Enricher** : enrichit les evidence avec URL / documentKey / version / snippet
+
+### Diagramme (séquence)
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as llm-host (/chat)
+  participant R as RagMultiPassUpgradeContext
+  participant M as mcp-server (tools)
+  participant Q as Qdrant
+
+  U->>L: POST /chat (mode=GUIDED, from/to, workspaceId, moduleFocus?)
+  L->>R: retrieve(from,to,workspaceId,repoUrl,moduleFocus)
+  R->>M: rag.lookup (PROJECT_FACT)
+  M->>Q: lookup/filter
+  Q-->>M: hits
+  M-->>R: PROJECT_FACT hits
+
+  R->>M: rag.search / rag.lookup (release notes / deps / guides)
+  M->>Q: similaritySearch + filters
+  Q-->>M: hits
+  M-->>R: release hits
+
+  R->>M: rag.findApiChangesBatch (symbols from PROJECT_FACT)
+  M->>Q: RAG compare/find API changes
+  Q-->>M: hits
+  M-->>R: api-change hits
+
+  R-->>L: UpgradeContext(hits + contextText "SOURCES: [S#] ...")
+  L->>L: Build strict system/user prompt (JSON only + evidence=[S#])
+  L-->>L: LLM answer (UpgradeReport JSON)
+  L->>L: Evidence Gate (remove non-justified)
+  L->>L: Evidence Enricher (add evidence details)
+  L-->>U: UpgradeReport (final JSON)
+```
+
 ## Prérequis
 - Docker et Docker Compose
 - Java 21 et Maven 3.9+
