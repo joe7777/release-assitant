@@ -111,7 +111,7 @@ public class AppProperties {
 
     public static class ToolingProperties {
 
-        private int maxToolCalls = 6;
+        private int maxToolCalls = 20;
         private int toolTimeoutSeconds = 90;
         private boolean dryRun = false;
         private int maxPromptLength = 4000;

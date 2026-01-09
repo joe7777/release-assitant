@@ -7,7 +7,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,18 +29,18 @@ import org.springframework.util.StringUtils;
 public class RagMultiPassUpgradeContext {
 
     private static final Logger logger = LoggerFactory.getLogger(RagMultiPassUpgradeContext.class);
-    private static final int RELEASE_NOTES_TOP_K = 5;
-    private static final int FOCUSED_RELEASE_NOTES_TOP_K = 10;
+    private static final int RELEASE_NOTES_TOP_K = 50;
+    private static final int FOCUSED_RELEASE_NOTES_TOP_K = 50;
     private static final int FOCUSED_SEARCH_MULTIPLIER = 3;
-    private static final int MAX_HITS = 12;
+    private static final int MAX_HITS = 50;
     private static final int PROJECT_FACT_TOP_K = 50;
     private static final int FOCUSED_PROJECT_FACT_TOP_K = 100;
     private static final int MAX_PROJECT_FACT_CHARS = 1500;
-    private static final int MAX_PROJECT_FACT_CHUNKS = 3;
-    private static final int SPRING_SOURCE_IMPORT_LIMIT = 20;
+    private static final int MAX_PROJECT_FACT_CHUNKS = 50;
+    private static final int SPRING_SOURCE_IMPORT_LIMIT = 50;
     private static final int DEPRECATION_LOOKUP_LIMIT = 50;
     private static final int PROJECT_FACT_SYMBOL_LOOKUP_LIMIT = 100;
-    private static final int API_CHANGES_TOP_K_PER_SYMBOL = 3;
+    private static final int API_CHANGES_TOP_K_PER_SYMBOL = 50;
     private static final int API_CHANGES_MAX_SYMBOLS = 500;
     private static final Pattern DEPRECATION_PATTERN =
             Pattern.compile("(?i)\\b(deprecat|deprecated|deprecation|removed|removal|breaking)\\b");
@@ -509,29 +508,43 @@ public class RagMultiPassUpgradeContext {
     }
 
     private List<RagHit> retrieveSpringSourceSnippets(List<RagHit> projectFacts, String toVersion) {
-        Optional<RagHit> inventory = Optional.empty();
+        List<RagHit> inventories = List.of();
         if (projectFacts != null) {
-            inventory = projectFacts.stream()
+            inventories = projectFacts.stream()
                     .filter(hit -> hit != null && hit.metadata() != null)
                     .filter(hit -> {
                         Object documentKey = hit.metadata().get("documentKey");
                         return documentKey != null && documentKey.toString().contains("/spring-usage-inventory");
                     })
-                    .findFirst();
-            if (inventory.isEmpty()) {
-                inventory = projectFacts.stream().findFirst();
+                    .toList();
+            if (inventories.isEmpty()) {
+                inventories = projectFacts.stream()
+                        .filter(hit -> hit != null)
+                        .toList();
             }
         }
-        if (inventory.isEmpty()) {
+        if (inventories.isEmpty()) {
             logger.info("Aucun PROJECT_FACT spring-usage-inventory pour récupérer les imports Spring.");
             return List.of();
         }
-        String json = inventory.get().text();
-        if (json == null || json.isBlank()) {
+        Set<String> springImportsSet = new LinkedHashSet<>();
+        for (RagHit inventory : inventories) {
+            String json = inventory.text();
+            if (json == null || json.isBlank()) {
+                continue;
+            }
+            springImportsSet.addAll(extractSpringImports(json));
+            if (springImportsSet.size() >= SPRING_SOURCE_IMPORT_LIMIT) {
+                break;
+            }
+        }
+        if (springImportsSet.isEmpty()) {
             logger.info("PROJECT_FACT spring-usage-inventory vide, aucun import Spring récupérable.");
             return List.of();
         }
-        List<String> springImports = extractSpringImports(json);
+        List<String> springImports = springImportsSet.stream()
+                .limit(SPRING_SOURCE_IMPORT_LIMIT)
+                .toList();
         if (springImports.isEmpty()) {
             logger.info("Aucun import Spring trouvé dans le PROJECT_FACT.");
             return List.of();
