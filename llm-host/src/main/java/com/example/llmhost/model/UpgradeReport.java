@@ -109,6 +109,7 @@ public class UpgradeReport {
         private String type;
         private List<String> affectedAreas = new ArrayList<>();
         private List<String> evidence = new ArrayList<>();
+        private List<EvidenceDetail> evidenceDetails = new ArrayList<>();
         private String recommendation;
 
         public String getId() {
@@ -159,6 +160,18 @@ public class UpgradeReport {
             }
         }
 
+        public List<EvidenceDetail> getEvidenceDetails() {
+            return evidenceDetails;
+        }
+
+        public void setEvidenceDetails(List<EvidenceDetail> evidenceDetails) {
+            if (evidenceDetails == null) {
+                this.evidenceDetails = new ArrayList<>();
+            } else {
+                this.evidenceDetails = new ArrayList<>(evidenceDetails);
+            }
+        }
+
         public String getRecommendation() {
             return recommendation;
         }
@@ -173,6 +186,7 @@ public class UpgradeReport {
         private int points;
         private String rationale;
         private List<String> evidence = new ArrayList<>();
+        private List<EvidenceDetail> evidenceDetails = new ArrayList<>();
 
         public Workpoint() {
         }
@@ -221,6 +235,18 @@ public class UpgradeReport {
                 this.evidence = new ArrayList<>(evidence);
             }
         }
+
+        public List<EvidenceDetail> getEvidenceDetails() {
+            return evidenceDetails;
+        }
+
+        public void setEvidenceDetails(List<EvidenceDetail> evidenceDetails) {
+            if (evidenceDetails == null) {
+                this.evidenceDetails = new ArrayList<>();
+            } else {
+                this.evidenceDetails = new ArrayList<>(evidenceDetails);
+            }
+        }
     }
 
     public static class Unknown {
@@ -263,6 +289,63 @@ public class UpgradeReport {
             } else {
                 this.evidence = new ArrayList<>(evidence);
             }
+        }
+    }
+
+    public static class EvidenceDetail {
+        private String source;
+        private String url;
+        private String documentKey;
+        private String version;
+        private String library;
+        private String filePath;
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public String getDocumentKey() {
+            return documentKey;
+        }
+
+        public void setDocumentKey(String documentKey) {
+            this.documentKey = documentKey;
+        }
+
+        public String getVersion() {
+            return version;
+        }
+
+        public void setVersion(String version) {
+            this.version = version;
+        }
+
+        public String getLibrary() {
+            return library;
+        }
+
+        public void setLibrary(String library) {
+            this.library = library;
+        }
+
+        public String getFilePath() {
+            return filePath;
+        }
+
+        public void setFilePath(String filePath) {
+            this.filePath = filePath;
         }
     }
 }
