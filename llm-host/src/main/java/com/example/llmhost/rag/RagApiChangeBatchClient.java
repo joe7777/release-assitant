@@ -61,10 +61,21 @@ public class RagApiChangeBatchClient {
         }
         try {
             JsonNode root = objectMapper.readTree(payload);
-            if (!root.isObject()) {
+            JsonNode candidate = root;
+            if (root.isArray() && root.size() > 0) {
+                JsonNode first = root.get(0);
+                if (first.isObject() && first.hasNonNull("text") && first.get("text").isTextual()) {
+                    candidate = objectMapper.readTree(first.get("text").asText());
+                } else {
+                    candidate = first;
+                }
+            } else if (root.isTextual()) {
+                candidate = objectMapper.readTree(root.asText());
+            }
+            if (!candidate.isObject()) {
                 throw new IllegalStateException("rag.findApiChangesBatch response must be JSON object");
             }
-            return objectMapper.convertValue(root, ApiChangeBatchResponse.class);
+            return objectMapper.convertValue(candidate, ApiChangeBatchResponse.class);
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Exception ex) {
