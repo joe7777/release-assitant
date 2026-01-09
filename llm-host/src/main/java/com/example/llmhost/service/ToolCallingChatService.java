@@ -92,26 +92,29 @@ public class ToolCallingChatService {
         String json = validation.json();
         String output = validation.content();
         GatingStats gating = null;
+        if (report != null) {
+            report = reportSanitizer.sanitize(report);
+        }
         if (guidedMode && report != null && guidedResult != null) {
             EvidenceGateResult gatedResult = evidenceGate.applyWithReport(report, guidedResult.context().hits().size());
             report = gatedResult.report();
             gating = gatedResult.stats();
-            json = writeReportJson(report, json);
         } else if (guidedMode) {
             int sourceCount = guidedResult == null ? 0 : guidedResult.context().hits().size();
             gating = evidenceGate.applyWithReport(report, sourceCount).stats();
         }
-        if (guidedMode && report != null) {
-            report = reportSanitizer.sanitize(report);
-            if (guidedResult != null) {
-                report = evidenceEnricher.enrich(report, guidedResult.context());
-            }
+        if (guidedMode && report != null && guidedResult != null) {
+            report = evidenceEnricher.enrich(report, guidedResult.context());
+        }
+        if (report != null) {
             json = writeReportJson(report, json);
         }
         if (guidedMode && json != null) {
             output = json;
         }
         if (report != null) {
+            LOGGER.debug("Sending report JSON to methodology client. evidenceDetails present={}",
+                    json != null && json.contains("evidenceDetails"));
             Optional<String> formatted = methodologyClient.writeReport(json);
             if (formatted.isPresent()) {
                 json = formatted.get();
