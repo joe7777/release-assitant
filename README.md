@@ -87,6 +87,15 @@ Le projet propose deux modes d’exécution pour générer un rapport d’upgrad
 
 **Objectif** : produire un rapport fiable, basé uniquement sur les sources récupérées par le backend.
 
+### Evidence [S#] et gating (GUIDED)
+
+Dans GUIDED, le backend produit une section `SOURCES` :
+- **S1** = inventaire projet (`PROJECT_FACT`)
+- **S2..Sn** = extraits de release notes / upgrading guide / dependency versions / API changes batch
+
+Le LLM doit référencer `evidence=["Sx"]` pour chaque impact/workpoint.
+Ensuite le gating supprime tout élément sans evidence valide (ou evidence hors `[S1..Sn]`).
+
 ### Pipeline
 1. `llm-host` construit un contexte RAG déterministe (multi-pass) :
    - PROJECT_FACT (inventaire Spring dans le code)
@@ -129,6 +138,20 @@ sequenceDiagram
   L->>L: Evidence Gate (remove non-justified)
   L->>L: Evidence Enricher (add evidence details)
   L-->>U: UpgradeReport (final JSON)
+```
+
+## Mode AUTO (LLM outillé + choix des tools)
+
+```mermaid
+flowchart LR
+  U[User] --> L[llm-host /chat\n(mode=AUTO)]
+  L --> AI[LLM\n(reasoning + tool calling)]
+  AI -->|optional| M[mcp-server tools]
+  M --> Q[Qdrant]
+  Q --> M --> AI --> L --> U
+
+  note1((AUTO: le LLM choisit\nquels tools appeler\net quelles sources utiliser))
+  AI --- note1
 ```
 
 ## Prérequis
