@@ -2,6 +2,7 @@ package com.example.llmhost.api;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -15,6 +16,7 @@ public record ChatRequest(
         String repoUrl,
         String fromVersion,
         String toVersion,
+        @JsonProperty("moduleFocus")
         List<String> moduleFocus
 ) {
 
