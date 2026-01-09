@@ -9,11 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.example.mcpserver.dto.MethodologyRulesResponse;
-import com.example.mcpserver.dto.UpgradeReport;
 import com.example.mcpserver.dto.WorkpointChange;
 import com.example.mcpserver.dto.WorkpointComputationResult;
 import com.example.mcpserver.service.MethodologyService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
@@ -41,15 +41,19 @@ public class MethodologyTools {
     }
 
     @Tool(name = "methodology.writeReport", description = "Nettoie et reformate un UpgradeReport en JSON")
-    public UpgradeReport writeReport(String content) throws IOException {
+    public String writeReport(String content) throws IOException {
         String json = extractJson(content);
         if (json == null || json.isBlank()) {
             LOGGER.warn("methodology.writeReport: extracted JSON is empty.");
         }
         try {
-            return objectMapper.readValue(json, UpgradeReport.class);
+            JsonNode node = objectMapper.readTree(json);
+            if (node != null && !node.isObject()) {
+                LOGGER.warn("methodology.writeReport: extracted JSON is not an object.");
+            }
+            return objectMapper.writeValueAsString(node);
         } catch (IOException exception) {
-            LOGGER.warn("methodology.writeReport: failed to parse UpgradeReport JSON.", exception);
+            LOGGER.warn("methodology.writeReport: failed to parse JSON.", exception);
             throw exception;
         }
     }
