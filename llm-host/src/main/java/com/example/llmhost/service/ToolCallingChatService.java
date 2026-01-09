@@ -47,10 +47,11 @@ public class ToolCallingChatService {
     private final MethodologyClient methodologyClient;
     private final UpgradeReportEvidenceGate evidenceGate;
     private final UpgradeReportSanitizer reportSanitizer;
+    private final EvidenceEnricher evidenceEnricher;
 
     public ToolCallingChatService(ChatClient chatClient, SystemPromptProvider systemPromptProvider, AppProperties properties,
             List<ToolCallback> functionCallbacks, RagMultiPassUpgradeContext upgradeContextService,
-            ObjectMapper objectMapper, MethodologyClient methodologyClient) {
+            ObjectMapper objectMapper, MethodologyClient methodologyClient, EvidenceEnricher evidenceEnricher) {
         this.chatClient = chatClient;
         this.systemPromptProvider = systemPromptProvider;
         this.properties = properties;
@@ -61,6 +62,7 @@ public class ToolCallingChatService {
         this.methodologyClient = methodologyClient;
         this.evidenceGate = new UpgradeReportEvidenceGate();
         this.reportSanitizer = new UpgradeReportSanitizer();
+        this.evidenceEnricher = evidenceEnricher;
     }
 
     public ChatRunResponse run(ChatRequest request) {
@@ -101,6 +103,9 @@ public class ToolCallingChatService {
         }
         if (guidedMode && report != null) {
             report = reportSanitizer.sanitize(report);
+            if (guidedResult != null) {
+                report = evidenceEnricher.enrich(report, guidedResult.context());
+            }
             json = writeReportJson(report, json);
         }
         if (guidedMode && json != null) {
