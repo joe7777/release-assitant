@@ -10,10 +10,11 @@ spring:
       chat:
         model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
     openai:
-      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:http://ollama:11434/v1}
+      api-key: ${OPENAI_API_KEY:ollama-local}
       chat:
         options:
-          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          model: ${OPENAI_CHAT_MODEL:llama3.1:8b}
     mcp:
       client:
         enabled: true
@@ -29,6 +30,7 @@ spring:
 
 app:
   ai:
+    # "openai" peut pointer vers Ollama via OPENAI_BASE_URL.
     provider: ${APP_AI_PROVIDER:ollama}
     ollama:
       chat-model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}

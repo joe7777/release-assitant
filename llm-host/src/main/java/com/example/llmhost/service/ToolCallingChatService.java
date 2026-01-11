@@ -34,6 +34,7 @@ public class ToolCallingChatService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallingChatService.class);
     private static final Pattern UPGRADE_PATTERN = Pattern.compile("\\bupgrade\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TOOL_CALL_PATTERN = Pattern.compile("tool[_\\s-]?call", Pattern.CASE_INSENSITIVE);
     private static final String REPAIR_SYSTEM_PROMPT = "Tu es un réparateur JSON. Retourne uniquement un JSON valide "
             + "conforme au contrat UpgradeReport. Aucun texte hors JSON.";
 
@@ -79,6 +80,8 @@ public class ToolCallingChatService {
             guidedResult = runGuidedUpgrade(request);
             content = guidedResult.content();
         } else {
+            LOGGER.debug("AUTO mode: toolCallbacksEnabled={} provider={}", callbacks.size(),
+                    properties.getAi().getProvider());
             content = chatClient.prompt()
                     .system(systemPromptProvider.buildSystemPrompt())
                     .user(request.prompt())
@@ -86,6 +89,11 @@ public class ToolCallingChatService {
                     .toolCallbacks(callbacks)
                     .call()
                     .content();
+            if (shouldUseTools(request) && traces.isEmpty() && content != null
+                    && TOOL_CALL_PATTERN.matcher(content).find()) {
+                LOGGER.warn("AUTO mode: tool calls detected in response but no tool callbacks executed. provider={}",
+                        properties.getAi().getProvider());
+            }
         }
         ValidationResult validation = validateAndRepairReport(content);
         UpgradeReport report = validation.report();

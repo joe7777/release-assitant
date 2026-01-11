@@ -7,6 +7,17 @@ Service Spring Boot 3.5.x (Java 21) qui orchestre les chats LLM via Spring AI 1.
 L'endpoint `/debug/ragTest` force un appel direct au tool MCP `rag.search` puis (optionnellement) interroge
 le LLM **sans tool-calling** pour vérifier qu'il cite les chunks retournés.
 
+## Full auto tool-calling with Ollama via OpenAI-compatible endpoint
+
+Pour activer le tool-calling AUTO avec Ollama (via l'API OpenAI-compatible), définir:
+
+```bash
+APP_AI_PROVIDER=openai
+OPENAI_BASE_URL=http://ollama:11434/v1
+OPENAI_CHAT_MODEL=llama3.1:8b
+OPENAI_API_KEY=ollama-local
+```
+
 ### Exemple (recherche seule)
 
 ```bash
