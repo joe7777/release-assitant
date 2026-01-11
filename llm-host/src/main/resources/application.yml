@@ -10,7 +10,8 @@ spring:
       chat:
         model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
     openai:
-      base-url: ${OPENAI_BASE_URL:http://ollama:11434/v1}
+      # Spring AI ajoute /v1 automatiquement pour OpenAI; pour Ollama, garder la racine.
+      base-url: ${OPENAI_BASE_URL:http://ollama:11434}
       api-key: ${OPENAI_API_KEY:ollama-local}
       chat:
         options:

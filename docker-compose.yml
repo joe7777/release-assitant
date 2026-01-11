@@ -128,7 +128,7 @@ services:
       MCP_SERVER_URL: http://mcp-server:8085
       MCP_CLIENT_CONNECT_TIMEOUT: 5s
       MCP_CLIENT_READ_TIMEOUT: 60s
-      OPENAI_BASE_URL: http://ollama:11434/v1
+      OPENAI_BASE_URL: http://ollama:11434
       OPENAI_CHAT_MODEL: llama3.1:8b
       OPENAI_API_KEY: ollama-local
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5010"
